@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#2563D9" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+  <title>候场</title>
+  <path d="M5 18.5C8.2 12.6 12 9.7 19 5.5"/>
+  <circle cx="5" cy="18.5" r="2.25" fill="#3BBF75" stroke="none"/>
+  <circle cx="12" cy="11.5" r="2.15"/>
+  <circle cx="19" cy="5.5" r="2.15"/>
+</svg>

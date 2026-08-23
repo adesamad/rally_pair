@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#2563D9" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+  <title>休息</title>
+  <circle cx="9" cy="7.5" r="3"/>
+  <path d="M3.8 19c.6-3.7 2.5-5.5 5.2-5.5 1.6 0 2.9.6 3.8 1.8"/>
+  <rect x="14.5" y="13" width="6.5" height="7" rx="2.5" fill="#3BBF75" stroke="none"/>
+  <path d="M17 15v3M19 15v3" stroke="#102A43" stroke-width="1.6"/>
+</svg>

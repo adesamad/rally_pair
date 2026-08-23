@@ -1,0 +1,434 @@
+<!doctype html>
+<!-- Managed by docs-keeper: docs/work/icon_library -->
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>羽搭 · 图标视觉基线</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root {
+      color-scheme: light;
+      --page: #171918;
+      --page-text: #f4f3ee;
+      --page-muted: #a8aca8;
+    }
+    body {
+      margin: 0;
+      min-width: 320px;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(99, 136, 109, .18), transparent 30%),
+        radial-gradient(circle at 88% 100%, rgba(179, 95, 69, .12), transparent 34%),
+        var(--page);
+      color: var(--page-text);
+      font-family: "Avenir Next", "PingFang SC", "Hiragino Sans GB", sans-serif;
+    }
+    button { font: inherit; }
+    .page {
+      width: min(1500px, 100%);
+      margin: 0 auto;
+      padding: 42px clamp(18px, 4vw, 60px) 56px;
+    }
+    .eyebrow {
+      margin: 0 0 10px;
+      color: #b8d0bf;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+    h1 {
+      max-width: 760px;
+      margin: 0;
+      font-family: "Iowan Old Style", "Songti SC", serif;
+      font-size: clamp(34px, 5vw, 62px);
+      font-weight: 600;
+      line-height: 1.06;
+      letter-spacing: -.04em;
+    }
+    .intro {
+      max-width: 720px;
+      margin: 18px 0 34px;
+      color: var(--page-muted);
+      font-size: 15px;
+      line-height: 1.75;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 26px;
+    }
+    .legend span {
+      padding: 7px 10px;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 999px;
+      color: #d4d6d3;
+      font-size: 12px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 520px);
+      justify-content: center;
+      align-items: start;
+    }
+    .candidate:not(.sky) { display: none; }
+    .candidate {
+      --bg: #f4f1e8;
+      --surface: #fffef8;
+      --surface-soft: #e5eee4;
+      --ink: #153a32;
+      --muted: #63776f;
+      --primary: #247a5a;
+      --accent: #d9f252;
+      --court: #2e865f;
+      --court-line: #fffdf4;
+      --danger: #cb5149;
+      min-width: 0;
+    }
+    .candidate.sky {
+      --bg: #edf4fa;
+      --surface: #ffffff;
+      --surface-soft: #ddeaf2;
+      --ink: #102a43;
+      --muted: #526b7b;
+      --primary: #2563d9;
+      --accent: #3bbf75;
+      --court: #2e9376;
+      --court-line: #f8fffc;
+      --danger: #c23e55;
+    }
+    .candidate.match {
+      --bg: #ebe9e4;
+      --surface: #fbf8f1;
+      --surface-soft: #25282b;
+      --ink: #23262b;
+      --muted: #6f7073;
+      --primary: #d83742;
+      --accent: #e7a13d;
+      --court: #34383b;
+      --court-line: #fbf7ee;
+      --danger: #a9232d;
+    }
+    .candidate-head {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .candidate-letter {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border: 1px solid rgba(255,255,255,.17);
+      border-radius: 50%;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .candidate-title { margin: 0; font-size: 16px; font-weight: 750; }
+    .candidate-note { margin: 3px 0 0; color: var(--page-muted); font-size: 12px; }
+    .selected-chip {
+      justify-self: end;
+      padding: 6px 9px;
+      border-radius: 999px;
+      background: #2563d9;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .06em;
+    }
+    .phone {
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 34px;
+      background: var(--bg);
+      color: var(--ink);
+      box-shadow: 0 26px 60px rgba(0,0,0,.24);
+    }
+    .phone-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 24px 22px 15px;
+    }
+    .brand { font-size: 20px; font-weight: 800; letter-spacing: -.03em; }
+    .live-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 9px;
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .live-chip::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 24%, transparent);
+    }
+    .session-head { padding: 0 22px 16px; }
+    .session-head h3 { margin: 0; font-size: 25px; line-height: 1.15; letter-spacing: -.035em; }
+    .session-head p { margin: 7px 0 0; color: var(--muted); font-size: 12px; }
+    .court-wrap { padding: 0 14px; }
+    .court {
+      position: relative;
+      height: 212px;
+      overflow: hidden;
+      border-radius: 25px;
+      background: var(--court);
+      color: var(--court-line);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--court-line) 20%, transparent);
+    }
+    .court-lines {
+      position: absolute;
+      inset: 16px;
+      width: calc(100% - 32px);
+      height: calc(100% - 32px);
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 8;
+      vector-effect: non-scaling-stroke;
+      opacity: .86;
+    }
+    .court-lines .net { stroke-width: 12; opacity: .96; }
+    .player {
+      position: absolute;
+      z-index: 2;
+      display: grid;
+      place-items: center;
+      width: 31px;
+      height: 31px;
+      border: 3px solid currentColor;
+      border-radius: 50%;
+      background: var(--court);
+      color: var(--court-line);
+      font-size: 10px;
+      font-weight: 800;
+    }
+    .player.active { border-color: var(--accent); background: var(--accent); color: var(--ink); }
+    .p1 { top: 45px; left: 29%; }
+    .p2 { top: 45px; right: 29%; }
+    .p3 { bottom: 42px; left: 29%; }
+    .p4 { right: 29%; bottom: 42px; }
+    .court-label {
+      position: absolute;
+      z-index: 3;
+      top: 12px;
+      left: 14px;
+      padding: 5px 8px;
+      border-radius: 9px;
+      background: color-mix(in srgb, var(--ink) 76%, transparent);
+      color: white;
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .dock {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 5px;
+      margin: 12px 14px 0;
+      padding: 8px;
+      border-radius: 22px;
+      background: var(--surface);
+    }
+    .icon-button {
+      display: grid;
+      justify-items: center;
+      gap: 5px;
+      min-width: 0;
+      padding: 8px 2px 7px;
+      border: 0;
+      border-radius: 15px;
+      background: transparent;
+      color: var(--muted);
+    }
+    .icon-button.active { background: var(--surface-soft); color: var(--primary); }
+    .match .icon-button.active { color: var(--accent); }
+    .icon-button span { font-size: 9px; font-weight: 700; white-space: nowrap; }
+    .glyph {
+      width: 25px;
+      height: 25px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.45;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .glyph .accent-fill { fill: var(--accent); stroke: var(--accent); }
+    .glyph .primary-fill { fill: currentColor; stroke: currentColor; }
+    .phone-actions { padding: 14px 14px 17px; }
+    .primary-action {
+      width: 100%;
+      padding: 14px 16px;
+      border: 0;
+      border-radius: 17px;
+      background: var(--primary);
+      color: white;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: .01em;
+    }
+    .match .primary-action { color: #fffaf5; }
+    .palette {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      margin-top: 12px;
+    }
+    .swatch {
+      height: 38px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.1);
+    }
+    .token-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 10px;
+      color: var(--page-muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .stress {
+      margin-top: 10px;
+      padding: 11px 12px;
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 13px;
+      color: #d6d8d5;
+      font-size: 11px;
+      line-height: 1.6;
+    }
+    .stress b { color: #fff; }
+    .final-record {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      width: min(920px, 100%);
+      margin: 30px auto 0;
+    }
+    .record-card {
+      padding: 17px;
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 18px;
+      background: rgba(255,255,255,.035);
+    }
+    .record-card h2 { margin: 0 0 10px; font-size: 13px; }
+    .record-card p { margin: 0; color: #b9bebb; font-size: 11px; line-height: 1.7; }
+    .record-card code { color: #dce9ff; font-family: "SFMono-Regular", Consolas, monospace; }
+    .footnote {
+      margin: 34px 0 0;
+      padding-top: 20px;
+      border-top: 1px solid rgba(255,255,255,.1);
+      color: var(--page-muted);
+      font-size: 12px;
+      line-height: 1.7;
+    }
+    @media (max-width: 1020px) {
+      .grid { grid-template-columns: 1fr; }
+      .candidate { width: min(520px, 100%); margin: 0 auto 26px; }
+      .final-record { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <p class="eyebrow">RallyPair / 羽搭 · Selected Visual Direction</p>
+    <h1>“天空与草地”成为羽搭图标系统的第一块基线。</h1>
+    <p class="intro">保留圆润粗轮廓、大留白和局部实心强调；蓝色负责品牌与主操作，绿色只服务球场、进行中和局部反馈。球场已经改为标准羽毛球场线结构。</p>
+    <div class="legend">
+      <span>方案 B 已确定</span><span>5 组结构保留</span><span>标准羽毛球场线</span><span>蓝色主操作</span><span>绿色运动状态</span>
+    </div>
+
+    <section class="grid" aria-label="已确认配色方案">
+      <article class="candidate court-fresh">
+        <header class="candidate-head">
+          <div class="candidate-letter">A</div>
+          <div><h2 class="candidate-title">球场清新</h2><p class="candidate-note">暖白 × 墨绿 × 球场绿 × 荧光黄绿</p></div>
+        </header>
+        <div class="phone">
+          <div class="phone-top"><span class="brand">羽搭</span><span class="live-chip">进行中</span></div>
+          <div class="session-head"><h3>周六晚场</h3><p>2 块场地 · 8 人候场 · 第 3 轮</p></div>
+          <div class="court-wrap">
+            <div class="court"><span class="court-label">1 号场</span><i class="center-line"></i><i class="service-line"></i><i class="player p1">林</i><i class="player p2 active">陈</i><i class="player p3">周</i><i class="player p4">苏</i></div>
+          </div>
+          <div class="dock">
+            <button class="icon-button active"><svg class="glyph" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M4 12h16M12 3v18"/><circle class="accent-fill" cx="16.5" cy="7.5" r="1.4"/></svg><span>球场</span></button>
+            <button class="icon-button"><svg class="glyph" viewBox="0 0 24 24"><circle cx="7" cy="7" r="2.2"/><circle cx="17" cy="7" r="2.2"/><circle cx="7" cy="17" r="2.2"/><circle class="primary-fill" cx="17" cy="17" r="2.2"/><path d="M4 12h16"/></svg><span>分组</span></button>
+            <button class="icon-button"><svg class="glyph" viewBox="0 0 24 24"><path d="M5 18c3.5-6 6.5-8 14-11"/><circle class="primary-fill" cx="6" cy="17" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="7" r="2"/></svg><span>候场</span></button>
+            <button class="icon-button"><svg class="glyph" viewBox="0 0 24 24"><path d="M6 8c2.4-3 7.7-3.7 11-.8M18 16c-2.4 3-7.7 3.7-11 .8"/><circle class="primary-fill" cx="5.5" cy="8.7" r="1.8"/><circle cx="18.5" cy="15.3" r="1.8"/></svg><span>轮转</span></button>
+            <button class="icon-button"><svg class="glyph" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M7 9h10M7 15h10"/><circle class="accent-fill" cx="16.5" cy="9" r="1.4"/><circle cx="7.5" cy="15" r="1.4"/></svg><span>结果</span></button>
+          </div>
+          <div class="phone-actions"><button class="primary-action">生成下一轮</button></div>
+        </div>
+        <div class="palette"><i class="swatch" style="background:#f4f1e8"></i><i class="swatch" style="background:#153a32"></i><i class="swatch" style="background:#247a5a"></i><i class="swatch" style="background:#2e865f"></i><i class="swatch" style="background:#d9f252"></i></div>
+        <div class="token-line"><span>#F4F1E8 · #153A32 · #247A5A</span><span>#2E865F · #D9F252</span></div>
+        <div class="stress"><b>压力测试：</b>长时间现场使用舒适；荧光色需限制在 10% 内。绿色状态不可只靠颜色，继续配合轮廓/文字。</div>
+      </article>
+
+      <article class="candidate sky">
+        <header class="candidate-head">
+          <div class="candidate-letter">B</div>
+          <div><h2 class="candidate-title">天空与草地</h2><p class="candidate-note">冷白 × 海军蓝 × 亮蓝 × 鲜绿</p></div><span class="selected-chip">已确定</span>
+        </header>
+        <div class="phone">
+          <div class="phone-top"><span class="brand">羽搭</span><span class="live-chip">进行中</span></div>
+          <div class="session-head"><h3>周六晚场</h3><p>2 块场地 · 8 人候场 · 第 3 轮</p></div>
+          <div class="court-wrap">
+            <div class="court"><span class="court-label">1 号场</span><svg class="court-lines" viewBox="0 0 1340 610" preserveAspectRatio="none" aria-hidden="true"><rect x="8" y="8" width="1324" height="594" rx="12"/><path d="M8 54H1332M8 556H1332M84 8V602M1256 8V602M472 8V602M868 8V602M8 305H472M868 305H1332"/><path class="net" d="M670 8V602"/></svg><i class="player p1">林</i><i class="player p2 active">陈</i><i class="player p3">周</i><i class="player p4">苏</i></div>
+          </div>
+          <div class="dock">
+            <button class="icon-button active"><svg class="glyph" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M4 12h16M12 3v18"/><circle class="accent-fill" cx="16.5" cy="7.5" r="1.4"/></svg><span>球场</span></button>
+            <button class="icon-button"><svg class="glyph" viewBox="0 0 24 24"><circle cx="7" cy="7" r="2.2"/><circle cx="17" cy="7" r="2.2"/><circle cx="7" cy="17" r="2.2"/><circle class="primary-fill" cx="17" cy="17" r="2.2"/><path d="M4 12h16"/></svg><span>分组</span></button>
+            <button class="icon-button"><svg class="glyph" viewBox="0 0 24 24"><path d="M5 18c3.5-6 6.5-8 14-11"/><circle class="primary-fill" cx="6" cy="17" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="7" r="2"/></svg><span>候场</span></button>
+            <button class="icon-button"><svg class="glyph" viewBox="0 0 24 24"><path d="M6 8c2.4-3 7.7-3.7 11-.8M18 16c-2.4 3-7.7 3.7-11 .8"/><circle class="primary-fill" cx="5.5" cy="8.7" r="1.8"/><circle cx="18.5" cy="15.3" r="1.8"/></svg><span>轮转</span></button>
+            <button class="icon-button"><svg class="glyph" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M7 9h10M7 15h10"/><circle class="accent-fill" cx="16.5" cy="9" r="1.4"/><circle cx="7.5" cy="15" r="1.4"/></svg><span>结果</span></button>
+          </div>
+          <div class="phone-actions"><button class="primary-action">生成下一轮</button></div>
+        </div>
+        <div class="palette"><i class="swatch" style="background:#edf4fa"></i><i class="swatch" style="background:#102a43"></i><i class="swatch" style="background:#2563d9"></i><i class="swatch" style="background:#2e9376"></i><i class="swatch" style="background:#3bbf75"></i></div>
+        <div class="token-line"><span>#EDF4FA · #102A43 · #2563D9</span><span>#2E9376 · #3BBF75</span></div>
+        <div class="stress"><b>压力测试：</b>主文字 13.19:1、主按钮 5.43:1；球场线 3.73:1，满足非文本图形对比。蓝绿不单独承担状态含义，仍配合文字、轮廓和位置。</div>
+      </article>
+
+      <article class="candidate match">
+        <header class="candidate-head">
+          <div class="candidate-letter">C</div>
+          <div><h2 class="candidate-title">比赛信号</h2><p class="candidate-note">暖灰 × 石墨黑 × 竞技红 × 琥珀</p></div>
+        </header>
+        <div class="phone">
+          <div class="phone-top"><span class="brand">羽搭</span><span class="live-chip">进行中</span></div>
+          <div class="session-head"><h3>周六晚场</h3><p>2 块场地 · 8 人候场 · 第 3 轮</p></div>
+          <div class="court-wrap">
+            <div class="court"><span class="court-label">1 号场</span><i class="center-line"></i><i class="service-line"></i><i class="player p1">林</i><i class="player p2 active">陈</i><i class="player p3">周</i><i class="player p4">苏</i></div>
+          </div>
+          <div class="dock">
+            <button class="icon-button active"><svg class="glyph" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M4 12h16M12 3v18"/><circle class="accent-fill" cx="16.5" cy="7.5" r="1.4"/></svg><span>球场</span></button>
+            <button class="icon-button"><svg class="glyph" viewBox="0 0 24 24"><circle cx="7" cy="7" r="2.2"/><circle cx="17" cy="7" r="2.2"/><circle cx="7" cy="17" r="2.2"/><circle class="primary-fill" cx="17" cy="17" r="2.2"/><path d="M4 12h16"/></svg><span>分组</span></button>
+            <button class="icon-button"><svg class="glyph" viewBox="0 0 24 24"><path d="M5 18c3.5-6 6.5-8 14-11"/><circle class="primary-fill" cx="6" cy="17" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="7" r="2"/></svg><span>候场</span></button>
+            <button class="icon-button"><svg class="glyph" viewBox="0 0 24 24"><path d="M6 8c2.4-3 7.7-3.7 11-.8M18 16c-2.4 3-7.7 3.7-11 .8"/><circle class="primary-fill" cx="5.5" cy="8.7" r="1.8"/><circle cx="18.5" cy="15.3" r="1.8"/></svg><span>轮转</span></button>
+            <button class="icon-button"><svg class="glyph" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M7 9h10M7 15h10"/><circle class="accent-fill" cx="16.5" cy="9" r="1.4"/><circle cx="7.5" cy="15" r="1.4"/></svg><span>结果</span></button>
+          </div>
+          <div class="phone-actions"><button class="primary-action">生成下一轮</button></div>
+        </div>
+        <div class="palette"><i class="swatch" style="background:#ebe9e4"></i><i class="swatch" style="background:#23262b"></i><i class="swatch" style="background:#d83742"></i><i class="swatch" style="background:#34383b"></i><i class="swatch" style="background:#e7a13d"></i></div>
+        <div class="token-line"><span>#EBE9E4 · #23262B · #D83742</span><span>#34383B · #E7A13D</span></div>
+        <div class="stress"><b>压力测试：</b>现场提醒和比分最醒目；红色不能同时承担错误与主操作，正式系统需要另设危险色或限制红色语义。</div>
+      </article>
+    </section>
+
+    <section class="final-record" aria-label="配色决策记录">
+      <article class="record-card"><h2>语义颜色</h2><p><code>#2563D9</code> 品牌与主操作<br><code>#3BBF75</code> 局部反馈<br><code>#2E9376</code> 球场表面<br><code>#C23E55</code> 危险与错误</p></article>
+      <article class="record-card"><h2>固定分组</h2><p>球场、分组、候场、轮转、结果。后续扩展图案时保持这一层级和命名，不改变当前主导航结构。</p></article>
+      <article class="record-card"><h2>使用边界</h2><p>高饱和色控制在页面面积 10–15% 内；蓝色不兼任错误色，绿色状态不只靠颜色识别。</p></article>
+    </section>
+    <p class="footnote">当前 HTML 是已确认的视觉与颜色基线，不是最终 Flutter 页面结构。球场比例依据 BWF 标准场地关系压缩绘制，并保留双打外边线、单打内边线、短发球线、双打后发球线、中线与球网。</p>
+  </main>
+</body>
+</html>

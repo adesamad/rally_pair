@@ -1,0 +1,72 @@
+<!doctype html>
+<!-- Managed by docs-keeper: docs/work/icon_library -->
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>羽搭 · 第一批语义图标</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root { --icon-size: 58px; --page:#121817; --surface:#ffffff; --bg:#edf4fa; --ink:#102a43; --muted:#526b7b; --primary:#2563d9; --accent:#3bbf75; }
+    body { margin:0; min-width:320px; background:radial-gradient(circle at 8% 0%,rgba(37,99,217,.16),transparent 32%),radial-gradient(circle at 100% 70%,rgba(59,191,117,.12),transparent 28%),var(--page); color:#f6f8f7; font-family:"Avenir Next","PingFang SC","Hiragino Sans GB",sans-serif; }
+    main { width:min(1180px,100%); margin:auto; padding:52px clamp(18px,5vw,70px) 70px; }
+    .eyebrow { margin:0 0 12px; color:#98b6ff; font-size:12px; font-weight:800; letter-spacing:.16em; text-transform:uppercase; }
+    h1 { max-width:760px; margin:0; font-family:"Songti SC","STSong",serif; font-size:clamp(38px,6vw,78px); line-height:1.03; letter-spacing:-.05em; font-weight:700; }
+    .intro { max-width:760px; margin:20px 0 0; color:#aeb8b4; font-size:14px; line-height:1.8; }
+    .tools { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:30px 0 26px; }
+    .tools span { margin-right:8px; color:#8e9b97; font-size:11px; }
+    .size-btn { padding:8px 12px; border:1px solid rgba(255,255,255,.13); border-radius:999px; background:transparent; color:#cbd2cf; font:inherit; font-size:11px; cursor:pointer; }
+    .size-btn.active { border-color:transparent; background:var(--primary); color:#fff; }
+    .gallery { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:13px; }
+    .icon-card { position:relative; overflow:hidden; min-width:0; padding:19px; border:1px solid rgba(255,255,255,.08); border-radius:24px; background:var(--bg); color:var(--ink); box-shadow:0 18px 45px rgba(0,0,0,.13); }
+    .icon-card::after { content:""; position:absolute; right:-28px; bottom:-35px; width:92px; height:92px; border-radius:50%; background:color-mix(in srgb,var(--accent) 13%,transparent); }
+    .card-head { display:flex; justify-content:space-between; gap:10px; align-items:start; }
+    .index { color:var(--primary); font-size:10px; font-weight:900; letter-spacing:.12em; }
+    .status { padding:4px 7px; border-radius:999px; background:#ddeaf2; color:var(--muted); font-size:9px; font-weight:800; }
+    .hero-icon { display:grid; place-items:center; height:106px; }
+    .hero-icon img { width:var(--icon-size); height:var(--icon-size); transition:width .2s ease,height .2s ease; }
+    .icon-card h2 { margin:0; font-size:17px; letter-spacing:-.02em; }
+    .icon-card p { min-height:35px; margin:6px 0 14px; color:var(--muted); font-size:10px; line-height:1.7; }
+    .actual { display:flex; align-items:center; justify-content:space-between; gap:12px; padding-top:12px; border-top:1px solid #d7e3eb; color:var(--muted); font-size:9px; }
+    .actual img { width:24px; height:24px; }
+    .principles { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:26px; }
+    .principles article { padding:18px; border:1px solid rgba(255,255,255,.09); border-radius:18px; background:rgba(255,255,255,.035); }
+    .principles h2 { margin:0 0 8px; font-size:13px; }
+    .principles p { margin:0; color:#aeb8b4; font-size:11px; line-height:1.7; }
+    footer { margin-top:30px; padding-top:20px; border-top:1px solid rgba(255,255,255,.09); color:#82908b; font-size:11px; line-height:1.7; }
+    footer a { color:#9cb9ff; }
+    @media (max-width:900px) { .gallery { grid-template-columns:repeat(2,1fr); } }
+    @media (max-width:560px) { .gallery,.principles { grid-template-columns:1fr; } h1 { font-size:42px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">RallyPair / Icon Batch 01</p>
+    <h1>第一批图标，先在 24px 里站稳。</h1>
+    <p class="intro">12 个高频语义沿用“天空与草地”配色：蓝色轮廓承担识别，绿色只做局部实心强调。卡片中央可切换放大尺寸，底部始终保留真实 24px 检查。</p>
+    <div class="tools"><span>放大检查</span><button class="size-btn" data-size="40">40px</button><button class="size-btn active" data-size="58">58px</button><button class="size-btn" data-size="76">76px</button></div>
+    <section class="gallery" aria-label="第一批语义图标">
+      <article class="icon-card"><div class="card-head"><b class="index">01 / CORE</b><span class="status">导航</span></div><div class="hero-icon"><img src="icons/court.svg" alt="球场图标"></div><h2>球场</h2><p>查看场地占用与当前比赛。</p><div class="actual"><span>court.svg · 24px</span><img src="icons/court.svg" alt=""></div></article>
+      <article class="icon-card"><div class="card-head"><b class="index">02 / CORE</b><span class="status">导航</span></div><div class="hero-icon"><img src="icons/grouping.svg" alt="分组图标"></div><h2>分组</h2><p>四名玩家组合与搭档关系。</p><div class="actual"><span>grouping.svg · 24px</span><img src="icons/grouping.svg" alt=""></div></article>
+      <article class="icon-card"><div class="card-head"><b class="index">03 / CORE</b><span class="status">导航</span></div><div class="hero-icon"><img src="icons/waiting-queue.svg" alt="候场图标"></div><h2>候场</h2><p>玩家沿稳定队列等待上场。</p><div class="actual"><span>waiting-queue.svg · 24px</span><img src="icons/waiting-queue.svg" alt=""></div></article>
+      <article class="icon-card"><div class="card-head"><b class="index">04 / CORE</b><span class="status">导航</span></div><div class="hero-icon"><img src="icons/rotation.svg" alt="轮转图标"></div><h2>轮转</h2><p>比赛结束后重新进入排场。</p><div class="actual"><span>rotation.svg · 24px</span><img src="icons/rotation.svg" alt=""></div></article>
+      <article class="icon-card"><div class="card-head"><b class="index">05 / CORE</b><span class="status">导航</span></div><div class="hero-icon"><img src="icons/result.svg" alt="结果图标"></div><h2>结果</h2><p>胜负、局分与整场统计入口。</p><div class="actual"><span>result.svg · 24px</span><img src="icons/result.svg" alt=""></div></article>
+      <article class="icon-card"><div class="card-head"><b class="index">06 / SESSION</b><span class="status">对象</span></div><div class="hero-icon"><img src="icons/session.svg" alt="球局图标"></div><h2>球局</h2><p>创建、复制和恢复本地球局。</p><div class="actual"><span>session.svg · 24px</span><img src="icons/session.svg" alt=""></div></article>
+      <article class="icon-card"><div class="card-head"><b class="index">07 / PLAYER</b><span class="status">操作</span></div><div class="hero-icon"><img src="icons/player-add.svg" alt="添加玩家图标"></div><h2>添加玩家</h2><p>单个添加或进入批量名单入口。</p><div class="actual"><span>player-add.svg · 24px</span><img src="icons/player-add.svg" alt=""></div></article>
+      <article class="icon-card"><div class="card-head"><b class="index">08 / PLAYER</b><span class="status">状态</span></div><div class="hero-icon"><img src="icons/player-rest.svg" alt="休息图标"></div><h2>休息</h2><p>暂时离开候场队列但保留记录。</p><div class="actual"><span>player-rest.svg · 24px</span><img src="icons/player-rest.svg" alt=""></div></article>
+      <article class="icon-card"><div class="card-head"><b class="index">09 / PLAYER</b><span class="status">状态</span></div><div class="hero-icon"><img src="icons/player-leave.svg" alt="离场图标"></div><h2>离场</h2><p>退出当前球局，历史数据保留。</p><div class="actual"><span>player-leave.svg · 24px</span><img src="icons/player-leave.svg" alt=""></div></article>
+      <article class="icon-card"><div class="card-head"><b class="index">10 / MATCH</b><span class="status">主操作</span></div><div class="hero-icon"><img src="icons/match-start.svg" alt="开始比赛图标"></div><h2>开始比赛</h2><p>锁定场地与四名玩家并开场。</p><div class="actual"><span>match-start.svg · 24px</span><img src="icons/match-start.svg" alt=""></div></article>
+      <article class="icon-card"><div class="card-head"><b class="index">11 / MATCH</b><span class="status">操作</span></div><div class="hero-icon"><img src="icons/score-entry.svg" alt="录入比分图标"></div><h2>录入比分</h2><p>记录胜方或每局最终比分。</p><div class="actual"><span>score-entry.svg · 24px</span><img src="icons/score-entry.svg" alt=""></div></article>
+      <article class="icon-card"><div class="card-head"><b class="index">12 / SESSION</b><span class="status">入口</span></div><div class="hero-icon"><img src="icons/history.svg" alt="历史图标"></div><h2>历史</h2><p>查看已结束球局与总结。</p><div class="actual"><span>history.svg · 24px</span><img src="icons/history.svg" alt=""></div></article>
+    </section>
+    <section class="principles" aria-label="绘制约束"><article><h2>结构</h2><p>24×24 viewBox，2.2px 圆头轮廓；主体尽量控制在 3–21px 安全区。</p></article><article><h2>双色预算</h2><p>蓝色构成主体，绿色只占一个局部焦点；不靠绿色单独表达业务状态。</p></article><article><h2>识别优先</h2><p>放大稿用于看结构，24px 才是淘汰标准；小尺寸发糊的图案不进入实现。</p></article></section>
+    <footer>本批次是可编辑 SVG 概念源，不代表已经进入生产 assets。视觉基线见 <a href="rally-pair-icon-palette-preview.html">图标与配色确认稿</a>。</footer>
+  </main>
+  <script>
+    document.querySelectorAll('.size-btn').forEach(button => button.addEventListener('click', () => {
+      document.documentElement.style.setProperty('--icon-size', `${button.dataset.size}px`);
+      document.querySelectorAll('.size-btn').forEach(item => item.classList.toggle('active', item === button));
+    }));
+  </script>
+</body>
+</html>

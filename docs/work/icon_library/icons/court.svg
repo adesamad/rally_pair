@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#2563D9" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+  <title>球场</title>
+  <rect x="4" y="2.5" width="16" height="19" rx="3"/>
+  <path d="M4 12h16M4 8h16M4 16h16M12 2.5V8M12 16v5.5"/>
+  <circle cx="16" cy="6" r="1.55" fill="#3BBF75" stroke="none"/>
+</svg>

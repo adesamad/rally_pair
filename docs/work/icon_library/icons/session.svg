@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#2563D9" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+  <title>球局</title>
+  <rect x="3.5" y="4.5" width="17" height="16" rx="4"/>
+  <path d="M7.5 2.8v3.4M16.5 2.8v3.4M3.5 9h17M8 13h3M8 17h6"/>
+  <circle cx="16.5" cy="14.5" r="1.75" fill="#3BBF75" stroke="none"/>
+</svg>
