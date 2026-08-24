@@ -1,0 +1,26 @@
+name: cv_rally_pair_log
+description: Encrypted local diagnostic logs for Rally Pair.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.11.1
+  flutter: ">=3.22.0"
+
+dependencies:
+  encrypt: 5.0.3
+  flutter:
+    sdk: flutter
+  path: ^1.9.1
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: com.rallypair.cv_rally_pair_log
+        pluginClass: CvRallyPairLogPlugin
+      ios:
+        pluginClass: CvRallyPairLogPlugin

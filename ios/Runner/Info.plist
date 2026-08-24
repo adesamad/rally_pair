@@ -8,6 +8,14 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
 	<string>Rally Pair</string>
+	<key>NSCameraUsageDescription</key>
+	<string>用于拍摄活动或对局相关图片与视频作为附件。</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>用于录制活动或对局相关视频的声音。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>用于选择活动或对局相关图片与视频作为附件。</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>用于保存拍摄的活动或对局相关图片与视频。</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
