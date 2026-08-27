@@ -4,6 +4,7 @@ import 'dart:math';
 import 'models.dart';
 import 'pairing.dart';
 import 'score_rules.dart';
+import 'snapshot.dart';
 
 final class PlaySession {
   PlaySession._({required this.id, required SessionSetup setup})
@@ -15,6 +16,37 @@ final class PlaySession {
 
   factory PlaySession.create({required int id, required SessionSetup setup}) {
     return PlaySession._(id: id, setup: _validSetup(setup));
+  }
+
+  factory PlaySession.restore(PlaySessionSnapshot snapshot) {
+    final session = PlaySession._(
+      id: snapshot.id,
+      setup: _validSetup(snapshot.setup),
+    );
+    if (snapshot.players.map((player) => player.id).toSet().length !=
+            snapshot.players.length ||
+        snapshot.courts.map((court) => court.number).toSet().length !=
+            snapshot.courts.length ||
+        snapshot.matches.map((match) => match.id).toSet().length !=
+            snapshot.matches.length) {
+      throw const RuleViolation('invalid_session_snapshot');
+    }
+    session
+      .._status = snapshot.status
+      .._players.addEntries(
+        snapshot.players.map((player) => MapEntry(player.id, player)),
+      )
+      .._courts = {for (final court in snapshot.courts) court.number: court}
+      .._matches.addEntries(
+        snapshot.matches.map((match) => MapEntry(match.id, match)),
+      )
+      .._nextPlayerId = snapshot.nextPlayerId
+      .._nextMatchId = snapshot.nextMatchId
+      .._nextQueueOrder = snapshot.nextQueueOrder
+      .._pairingRound = snapshot.pairingRound
+      .._completionOrder = snapshot.completionOrder;
+    session._validateRestoredState();
+    return session;
   }
 
   final int id;
@@ -31,6 +63,22 @@ final class PlaySession {
 
   SessionSetup get setup => _setup;
   SessionStatus get status => _status;
+
+  PlaySessionSnapshot snapshot() {
+    return PlaySessionSnapshot(
+      id: id,
+      setup: _setup,
+      status: _status,
+      players: players,
+      courts: courts,
+      matches: matches,
+      nextPlayerId: _nextPlayerId,
+      nextMatchId: _nextMatchId,
+      nextQueueOrder: _nextQueueOrder,
+      pairingRound: _pairingRound,
+      completionOrder: _completionOrder,
+    );
+  }
 
   List<SessionPlayer> get players {
     final values = _players.values.toList()
@@ -474,6 +522,147 @@ final class PlaySession {
     _players.clear();
     _matches.clear();
     _courts.clear();
+  }
+
+  void _validateRestoredState() {
+    if (_nextPlayerId <= _maxOrZero(_players.keys) ||
+        _nextMatchId <= _maxOrZero(_matches.keys) ||
+        _nextQueueOrder <=
+            _maxOrNegativeOne(
+              _players.values.map((player) => player.queueOrder),
+            ) ||
+        _pairingRound < 0 ||
+        _completionOrder < 0) {
+      throw const RuleViolation('invalid_session_snapshot');
+    }
+
+    if (_status == SessionStatus.deleted) {
+      if (_players.isNotEmpty || _courts.isNotEmpty || _matches.isNotEmpty) {
+        throw const RuleViolation('invalid_session_snapshot');
+      }
+      return;
+    }
+
+    if (_courts.length != _setup.courtCount ||
+        !_courts.keys.toSet().containsAll(
+          List.generate(_setup.courtCount, (index) => index + 1),
+        )) {
+      throw const RuleViolation('invalid_session_snapshot');
+    }
+
+    final expectedPlayerStates = <int, PlayerState>{};
+    var maxCompletionOrder = 0;
+    for (final match in _matches.values) {
+      if (match.id <= 0 ||
+          match.players.any((playerId) => playerId <= 0) ||
+          match.players.toSet().length != 4 ||
+          !match.players.every(_players.containsKey) ||
+          !_courts.containsKey(match.courtNumber)) {
+        throw const RuleViolation('invalid_session_snapshot');
+      }
+      if (match.state == MatchState.completed) {
+        if (match.result == null ||
+            match.completedOrder == null ||
+            match.completedOrder! <= 0) {
+          throw const RuleViolation('invalid_session_snapshot');
+        }
+        ScoreRules.validate(_setup.scorePreset, match.result!);
+        maxCompletionOrder = max(maxCompletionOrder, match.completedOrder!);
+      } else if (match.result != null || match.completedOrder != null) {
+        throw const RuleViolation('invalid_session_snapshot');
+      }
+
+      final expectedState = switch (match.state) {
+        MatchState.ready => PlayerState.assigned,
+        MatchState.inProgress => PlayerState.playing,
+        MatchState.completed || MatchState.canceled => null,
+      };
+      if (expectedState != null) {
+        if (_status != SessionStatus.active) {
+          throw const RuleViolation('invalid_session_snapshot');
+        }
+        final court = _courts[match.courtNumber]!;
+        final expectedCourtState = match.state == MatchState.ready
+            ? CourtState.reserved
+            : CourtState.inPlay;
+        if (court.state != expectedCourtState || court.matchId != match.id) {
+          throw const RuleViolation('invalid_session_snapshot');
+        }
+        for (final playerId in match.players) {
+          if (expectedPlayerStates.containsKey(playerId)) {
+            throw const RuleViolation('invalid_session_snapshot');
+          }
+          expectedPlayerStates[playerId] = expectedState;
+        }
+      }
+    }
+    if (_completionOrder < maxCompletionOrder) {
+      throw const RuleViolation('invalid_session_snapshot');
+    }
+
+    for (final player in _players.values) {
+      if (player.id <= 0 || player.queueOrder < 0) {
+        throw const RuleViolation('invalid_session_snapshot');
+      }
+      final expected = expectedPlayerStates[player.id];
+      if (expected != null && player.state != expected) {
+        throw const RuleViolation('invalid_session_snapshot');
+      }
+      if (expected == null &&
+          (player.state == PlayerState.assigned ||
+              player.state == PlayerState.playing)) {
+        throw const RuleViolation('invalid_session_snapshot');
+      }
+      if (_status == SessionStatus.draft &&
+          player.state != PlayerState.waiting) {
+        throw const RuleViolation('invalid_session_snapshot');
+      }
+      if (_status == SessionStatus.completed &&
+          player.state != PlayerState.archived) {
+        throw const RuleViolation('invalid_session_snapshot');
+      }
+      if (_status == SessionStatus.active &&
+          player.state == PlayerState.archived) {
+        throw const RuleViolation('invalid_session_snapshot');
+      }
+    }
+
+    for (final court in _courts.values) {
+      if (court.number <= 0 || court.number > _setup.courtCount) {
+        throw const RuleViolation('invalid_session_snapshot');
+      }
+      if (court.state == CourtState.available) {
+        if (court.matchId != null) {
+          throw const RuleViolation('invalid_session_snapshot');
+        }
+        continue;
+      }
+      final match = _matches[court.matchId];
+      final expectedMatchState = court.state == CourtState.reserved
+          ? MatchState.ready
+          : MatchState.inProgress;
+      if (match == null ||
+          match.courtNumber != court.number ||
+          match.state != expectedMatchState) {
+        throw const RuleViolation('invalid_session_snapshot');
+      }
+    }
+
+    if (_status == SessionStatus.draft && _matches.isNotEmpty) {
+      throw const RuleViolation('invalid_session_snapshot');
+    }
+    if (_status == SessionStatus.completed &&
+        _courts.values.any((court) => court.state != CourtState.available)) {
+      throw const RuleViolation('invalid_session_snapshot');
+    }
+  }
+
+  static int _maxOrZero(Iterable<int> values) {
+    return values.isEmpty ? 0 : values.reduce(max);
+  }
+
+  static int _maxOrNegativeOne(Iterable<int> values) {
+    return values.isEmpty ? -1 : values.reduce(max);
   }
 
   static SessionSetup _validSetup(SessionSetup setup) {
