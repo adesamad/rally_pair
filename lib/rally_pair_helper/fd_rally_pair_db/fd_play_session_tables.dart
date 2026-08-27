@@ -14,6 +14,9 @@ class PlaySessionRecords extends Table {
   IntColumn get nextQueueOrder => integer()();
   IntColumn get pairingRound => integer()();
   IntColumn get completionOrder => integer()();
+  TextColumn get defaultRotationMode =>
+      text().withDefault(const Constant('winnerStays'))();
+  IntColumn get nextGroupId => integer().withDefault(const Constant(1))();
   IntColumn get updatedAt => integer()();
 
   @override
@@ -36,9 +39,23 @@ class SessionCourtRecords extends Table {
   IntColumn get number => integer()();
   TextColumn get state => text()();
   IntColumn get matchId => integer().nullable()();
+  TextColumn get name => text().withDefault(const Constant(''))();
+  IntColumn get stayingGroupId => integer().nullable()();
 
   @override
   Set<Column<Object>> get primaryKey => {sessionId, number};
+}
+
+class SessionGroupRecords extends Table {
+  IntColumn get sessionId => integer()();
+  IntColumn get id => integer()();
+  IntColumn get firstPlayerId => integer()();
+  IntColumn get secondPlayerId => integer()();
+  TextColumn get state => text()();
+  IntColumn get queueOrder => integer()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {sessionId, id};
 }
 
 class SessionMatchRecords extends Table {
@@ -54,6 +71,9 @@ class SessionMatchRecords extends Table {
   TextColumn get resultMode => text().nullable()();
   TextColumn get winner => text().nullable()();
   IntColumn get completedOrder => integer().nullable()();
+  IntColumn get groupAId => integer().nullable()();
+  IntColumn get groupBId => integer().nullable()();
+  TextColumn get rotationMode => text().nullable()();
 
   @override
   Set<Column<Object>> get primaryKey => {sessionId, id};

@@ -38,6 +38,10 @@ final class FdPlaySessionStore implements PlaySessionStore {
             ..where((table) => table.sessionId.equals(id))
             ..orderBy([(table) => OrderingTerm.asc(table.number)]))
           .get(),
+      (_database.select(_database.sessionGroupRecords)
+            ..where((table) => table.sessionId.equals(id))
+            ..orderBy([(table) => OrderingTerm.asc(table.id)]))
+          .get(),
       (_database.select(_database.sessionMatchRecords)
             ..where((table) => table.sessionId.equals(id))
             ..orderBy([(table) => OrderingTerm.asc(table.id)]))
@@ -52,8 +56,9 @@ final class FdPlaySessionStore implements PlaySessionStore {
     ]);
     final players = records[0].cast<SessionPlayerRecord>();
     final courts = records[1].cast<SessionCourtRecord>();
-    final matches = records[2].cast<SessionMatchRecord>();
-    final games = records[3].cast<MatchGameRecord>();
+    final groups = records[2].cast<SessionGroupRecord>();
+    final matches = records[3].cast<SessionMatchRecord>();
+    final games = records[4].cast<MatchGameRecord>();
 
     try {
       final gamesByMatch = <int, List<MatchGameRecord>>{};
@@ -70,6 +75,10 @@ final class FdPlaySessionStore implements PlaySessionStore {
             scorePreset: _enum(ScorePreset.values, record.scorePreset),
             avoidRecentPartner: record.avoidRecentPartner,
             randomSeed: record.randomSeed,
+            defaultRotationMode: _enum(
+              RotationMode.values,
+              record.defaultRotationMode,
+            ),
           ),
           status: _enum(SessionStatus.values, record.status),
           players: [
@@ -81,12 +90,24 @@ final class FdPlaySessionStore implements PlaySessionStore {
                 queueOrder: player.queueOrder,
               ),
           ],
+          groups: [
+            for (final group in groups)
+              PairingGroup(
+                id: group.id,
+                firstPlayerId: group.firstPlayerId,
+                secondPlayerId: group.secondPlayerId,
+                state: _enum(GroupState.values, group.state),
+                queueOrder: group.queueOrder,
+              ),
+          ],
           courts: [
             for (final court in courts)
               Court(
                 number: court.number,
+                name: court.name.isEmpty ? '${court.number} 号场' : court.name,
                 state: _enum(CourtState.values, court.state),
                 matchId: court.matchId,
+                stayingGroupId: court.stayingGroupId,
               ),
           ],
           matches: [
@@ -98,11 +119,17 @@ final class FdPlaySessionStore implements PlaySessionStore {
                 teamB: Team(match.teamBFirst, match.teamBSecond),
                 state: _enum(MatchState.values, match.state),
                 relaxed: match.relaxed,
+                groupAId: match.groupAId,
+                groupBId: match.groupBId,
+                rotationMode: match.rotationMode == null
+                    ? null
+                    : _enum(RotationMode.values, match.rotationMode!),
                 result: _result(match, gamesByMatch[match.id] ?? const []),
                 completedOrder: match.completedOrder,
               ),
           ],
           nextPlayerId: record.nextPlayerId,
+          nextGroupId: record.nextGroupId,
           nextMatchId: record.nextMatchId,
           nextQueueOrder: record.nextQueueOrder,
           pairingRound: record.pairingRound,
@@ -168,6 +195,19 @@ final class FdPlaySessionStore implements PlaySessionStore {
     await _database.transaction(() => _delete(id));
   }
 
+  @override
+  Future<void> replaceAll(Iterable<PlaySession> sessions) async {
+    final snapshots = sessions
+        .map((session) => session.snapshot())
+        .toList(growable: false);
+    await _database.transaction(() async {
+      await _deleteAll();
+      for (final snapshot in snapshots) {
+        await _save(snapshot);
+      }
+    });
+  }
+
   Future<void> _save(PlaySessionSnapshot snapshot) async {
     await _database
         .into(_database.playSessionRecords)
@@ -186,11 +226,14 @@ final class FdPlaySessionStore implements PlaySessionStore {
             nextQueueOrder: snapshot.nextQueueOrder,
             pairingRound: snapshot.pairingRound,
             completionOrder: snapshot.completionOrder,
+            defaultRotationMode: Value(snapshot.setup.defaultRotationMode.name),
+            nextGroupId: Value(snapshot.nextGroupId),
             updatedAt: _now().microsecondsSinceEpoch,
           ),
         );
     await _deleteChildren(snapshot.id);
     await _writePlayers(snapshot);
+    await _writeGroups(snapshot);
     await _writeCourts(snapshot);
     await _writeMatches(snapshot);
   }
@@ -200,6 +243,15 @@ final class FdPlaySessionStore implements PlaySessionStore {
     await (_database.delete(
       _database.playSessionRecords,
     )..where((table) => table.id.equals(id))).go();
+  }
+
+  Future<void> _deleteAll() async {
+    await _database.delete(_database.matchGameRecords).go();
+    await _database.delete(_database.sessionMatchRecords).go();
+    await _database.delete(_database.sessionCourtRecords).go();
+    await _database.delete(_database.sessionGroupRecords).go();
+    await _database.delete(_database.sessionPlayerRecords).go();
+    await _database.delete(_database.playSessionRecords).go();
   }
 
   Future<void> _deleteChildren(int sessionId) async {
@@ -213,8 +265,28 @@ final class FdPlaySessionStore implements PlaySessionStore {
       _database.sessionCourtRecords,
     )..where((table) => table.sessionId.equals(sessionId))).go();
     await (_database.delete(
+      _database.sessionGroupRecords,
+    )..where((table) => table.sessionId.equals(sessionId))).go();
+    await (_database.delete(
       _database.sessionPlayerRecords,
     )..where((table) => table.sessionId.equals(sessionId))).go();
+  }
+
+  Future<void> _writeGroups(PlaySessionSnapshot snapshot) async {
+    if (snapshot.groups.isEmpty) return;
+    await _database.batch((batch) {
+      batch.insertAll(_database.sessionGroupRecords, [
+        for (final group in snapshot.groups)
+          SessionGroupRecordsCompanion.insert(
+            sessionId: snapshot.id,
+            id: group.id,
+            firstPlayerId: group.firstPlayerId,
+            secondPlayerId: group.secondPlayerId,
+            state: group.state.name,
+            queueOrder: group.queueOrder,
+          ),
+      ]);
+    });
   }
 
   Future<void> _writePlayers(PlaySessionSnapshot snapshot) async {
@@ -243,6 +315,8 @@ final class FdPlaySessionStore implements PlaySessionStore {
             number: court.number,
             state: court.state.name,
             matchId: Value(court.matchId),
+            name: Value(court.name),
+            stayingGroupId: Value(court.stayingGroupId),
           ),
       ]);
     });
@@ -266,6 +340,9 @@ final class FdPlaySessionStore implements PlaySessionStore {
             resultMode: Value(match.result?.mode.name),
             winner: Value(match.result?.winner.name),
             completedOrder: Value(match.completedOrder),
+            groupAId: Value(match.groupAId),
+            groupBId: Value(match.groupBId),
+            rotationMode: Value(match.rotationMode?.name),
           ),
       ]);
       batch.insertAll(_database.matchGameRecords, [

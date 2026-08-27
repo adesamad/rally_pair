@@ -4,7 +4,9 @@ import '../play_session/models.dart';
 import '../rally_pair_theme.dart';
 
 class SessionSetupPage extends StatefulWidget {
-  const SessionSetupPage({super.key});
+  const SessionSetupPage({super.key, this.initialSetup});
+
+  final SessionSetup? initialSetup;
 
   @override
   State<SessionSetupPage> createState() => _SessionSetupPageState();
@@ -12,11 +14,22 @@ class SessionSetupPage extends StatefulWidget {
 
 class _SessionSetupPageState extends State<SessionSetupPage> {
   final _title = TextEditingController();
-  var _courtCount = 2;
-  var _pairingPolicy = PairingPolicy.fairRotation;
+  var _courtCount = 0;
   var _scorePreset = ScorePreset.standard21;
-  var _avoidRecentPartner = true;
+  var _rotationMode = RotationMode.winnerStays;
   String? _titleError;
+
+  @override
+  void initState() {
+    super.initState();
+    final setup = widget.initialSetup;
+    if (setup != null) {
+      _title.text = setup.title;
+      _courtCount = setup.courtCount;
+      _scorePreset = setup.scorePreset;
+      _rotationMode = setup.defaultRotationMode;
+    }
+  }
 
   @override
   void dispose() {
@@ -34,10 +47,11 @@ class _SessionSetupPageState extends State<SessionSetupPage> {
       SessionSetup(
         title: title,
         courtCount: _courtCount,
-        pairingPolicy: _pairingPolicy,
         scorePreset: _scorePreset,
-        avoidRecentPartner: _avoidRecentPartner,
-        randomSeed: DateTime.now().microsecondsSinceEpoch & 0x7FFFFFFF,
+        randomSeed:
+            widget.initialSetup?.randomSeed ??
+            DateTime.now().microsecondsSinceEpoch & 0x7FFFFFFF,
+        defaultRotationMode: _rotationMode,
       ),
     );
   }
@@ -47,7 +61,7 @@ class _SessionSetupPageState extends State<SessionSetupPage> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text('新建球局'),
+        title: Text(widget.initialSetup == null ? '新建球局' : '调整球局设置'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -60,7 +74,10 @@ class _SessionSetupPageState extends State<SessionSetupPage> {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
-          child: FilledButton(onPressed: _submit, child: const Text('创建球局')),
+          child: FilledButton(
+            onPressed: _submit,
+            child: Text(widget.initialSetup == null ? '创建球局' : '保存设置'),
+          ),
         ),
       ),
       body: SafeArea(
@@ -111,22 +128,22 @@ class _SessionSetupPageState extends State<SessionSetupPage> {
                   ),
                   const SizedBox(height: 16),
                   _SetupSection(
-                    title: '分组方式',
-                    child: SegmentedButton<PairingPolicy>(
+                    title: '默认上下场方式',
+                    child: SegmentedButton<RotationMode>(
                       showSelectedIcon: false,
                       segments: const [
                         ButtonSegment(
-                          value: PairingPolicy.fairRotation,
-                          label: Text('公平轮转'),
+                          value: RotationMode.winnerStays,
+                          label: Text('胜方留场'),
                         ),
                         ButtonSegment(
-                          value: PairingPolicy.random,
-                          label: Text('完全随机'),
+                          value: RotationMode.allRotate,
+                          label: Text('两组下场'),
                         ),
                       ],
-                      selected: {_pairingPolicy},
+                      selected: {_rotationMode},
                       onSelectionChanged: (selection) {
-                        setState(() => _pairingPolicy = selection.single);
+                        setState(() => _rotationMode = selection.single);
                       },
                     ),
                   ),
@@ -152,23 +169,6 @@ class _SessionSetupPageState extends State<SessionSetupPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  _SetupSection(
-                    padding: EdgeInsets.zero,
-                    title: '',
-                    child: SwitchListTile.adaptive(
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 6,
-                      ),
-                      title: const Text('尽量避免连续重复搭档'),
-                      subtitle: const Text('无法避免时仍会生成分组，并在现场提示。'),
-                      value: _avoidRecentPartner,
-                      activeTrackColor: RallyPairColors.primary,
-                      onChanged: (value) {
-                        setState(() => _avoidRecentPartner = value);
-                      },
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -180,20 +180,15 @@ class _SessionSetupPageState extends State<SessionSetupPage> {
 }
 
 class _SetupSection extends StatelessWidget {
-  const _SetupSection({
-    required this.title,
-    required this.child,
-    this.padding = const EdgeInsets.all(18),
-  });
+  const _SetupSection({required this.title, required this.child});
 
   final String title;
   final Widget child;
-  final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: padding,
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: RallyPairColors.surface,
         borderRadius: BorderRadius.circular(20),
@@ -232,7 +227,7 @@ class _CourtCountField extends StatelessWidget {
         _CountButton(
           label: '−',
           semanticLabel: '减少场地',
-          onPressed: value > 1 ? () => onChanged(value - 1) : null,
+          onPressed: value > 0 ? () => onChanged(value - 1) : null,
         ),
         const SizedBox(width: 10),
         _CountButton(

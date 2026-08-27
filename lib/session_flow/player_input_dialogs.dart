@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../play_session/models.dart';
 import '../rally_pair_theme.dart';
 
 Future<String?> showPlayerNameDialog(
@@ -7,6 +8,7 @@ Future<String?> showPlayerNameDialog(
   required String title,
   String initialValue = '',
   String confirmLabel = '添加',
+  String fieldLabel = '玩家名称',
 }) {
   return showDialog<String>(
     context: context,
@@ -14,6 +16,7 @@ Future<String?> showPlayerNameDialog(
       title: title,
       initialValue: initialValue,
       confirmLabel: confirmLabel,
+      fieldLabel: fieldLabel,
     ),
   );
 }
@@ -25,16 +28,132 @@ Future<String?> showBatchPlayerDialog(BuildContext context) {
   );
 }
 
+Future<(int, int)?> showManualGroupDialog(
+  BuildContext context,
+  List<SessionPlayer> players,
+) {
+  var first = players.first.id;
+  var second = players[1].id;
+  return showDialog<(int, int)>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: const Text('手动组队'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<int>(
+              initialValue: first,
+              decoration: const InputDecoration(labelText: '第一名玩家'),
+              items: [
+                for (final player in players)
+                  DropdownMenuItem(value: player.id, child: Text(player.name)),
+              ],
+              onChanged: (value) {
+                if (value != null) setDialogState(() => first = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              initialValue: second,
+              decoration: const InputDecoration(labelText: '第二名玩家'),
+              items: [
+                for (final player in players)
+                  DropdownMenuItem(value: player.id, child: Text(player.name)),
+              ],
+              onChanged: (value) {
+                if (value != null) setDialogState(() => second = value);
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: first == second
+                ? null
+                : () => Navigator.of(dialogContext).pop((first, second)),
+            child: const Text('组成一组'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Future<(int, int)?> showGroupMemberReplacementDialog(
+  BuildContext context, {
+  required PairingGroup group,
+  required List<SessionPlayer> currentPlayers,
+  required List<SessionPlayer> replacements,
+}) {
+  if (replacements.isEmpty) return Future.value(null);
+  var source = group.firstPlayerId;
+  var replacement = replacements.first.id;
+  return showDialog<(int, int)>(
+    context: context,
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: const Text('更换组员'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<int>(
+              initialValue: source,
+              decoration: const InputDecoration(labelText: '要换下的玩家'),
+              items: [
+                for (final player in currentPlayers)
+                  DropdownMenuItem(value: player.id, child: Text(player.name)),
+              ],
+              onChanged: (value) {
+                if (value != null) setDialogState(() => source = value);
+              },
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              initialValue: replacement,
+              decoration: const InputDecoration(labelText: '换上的玩家'),
+              items: [
+                for (final player in replacements)
+                  DropdownMenuItem(value: player.id, child: Text(player.name)),
+              ],
+              onChanged: (value) {
+                if (value != null) setDialogState(() => replacement = value);
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(dialogContext).pop((source, replacement)),
+            child: const Text('确认更换'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 class _PlayerNameDialog extends StatefulWidget {
   const _PlayerNameDialog({
     required this.title,
     required this.initialValue,
     required this.confirmLabel,
+    required this.fieldLabel,
   });
 
   final String title;
   final String initialValue;
   final String confirmLabel;
+  final String fieldLabel;
 
   @override
   State<_PlayerNameDialog> createState() => _PlayerNameDialogState();
@@ -78,7 +197,7 @@ class _PlayerNameDialogState extends State<_PlayerNameDialog> {
         },
         onSubmitted: (_) => _submit(),
         decoration: InputDecoration(
-          labelText: '玩家名称',
+          labelText: widget.fieldLabel,
           hintText: '例如：小林',
           errorText: _errorText,
         ),

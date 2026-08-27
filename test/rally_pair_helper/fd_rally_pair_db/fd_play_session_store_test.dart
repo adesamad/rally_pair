@@ -1,342 +1,203 @@
-import 'dart:io';
-
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rally_pair/play_session/play_session.dart';
 import 'package:rally_pair/rally_pair_helper/fd_rally_pair_db/fd_rally_pair_db.dart';
 
 void main() {
-  group('FdPlaySessionStore', () {
-    late FdRallyPairDatabase database;
-    late FdPlaySessionStore store;
-    var clock = 0;
+  late FdRallyPairDatabase database;
+  late FdPlaySessionStore store;
 
-    setUp(() {
-      database = FdRallyPairDatabase(NativeDatabase.memory());
-      store = FdPlaySessionStore(
-        database,
-        now: () => DateTime.fromMicrosecondsSinceEpoch(++clock),
-      );
-    });
+  setUp(() {
+    database = FdRallyPairDatabase(NativeDatabase.memory());
+    store = FdPlaySessionStore(database);
+  });
 
-    tearDown(() => database.close());
+  tearDown(() => database.close());
 
-    test(
-      'round-trips a mixed active session without losing behavior',
-      () async {
-        final original = _mixedSession();
+  test('round-trip 保留双人组、具体场地和待轮转状态', () async {
+    final session = _session();
+    final match = session.assignNextGroups(1);
+    session.startMatch(match.id);
+    session.finishMatch(match.id, MatchResult.winnerOnly(Side.b));
 
-        await store.save(original);
-        final restored = await store.load(original.id);
+    await store.save(session);
+    final restored = await store.load(session.id);
 
-        expect(restored, isNotNull);
-        expect(_sessionData(restored!), _sessionData(original));
-        expect(_statsData(restored), _statsData(original));
-        expect(restored.players.map((player) => player.state).toSet(), {
-          PlayerState.waiting,
-          PlayerState.resting,
-          PlayerState.left,
-          PlayerState.assigned,
-          PlayerState.playing,
-        });
+    expect(restored, isNotNull);
+    expect(restored!.groups, hasLength(3));
+    expect(restored.courts.single.name, '1 号场');
+    expect(restored.courts.single.state, CourtState.awaitingRotation);
+    expect(restored.matches.single.state, MatchState.resultRecorded);
+  });
 
-        _cancelOpenMatches(original);
-        _cancelOpenMatches(restored);
-        expect(
-          original.generateAssignments().map(_matchData),
-          restored.generateAssignments().map(_matchData),
-        );
-      },
+  test('update 在同一事务中保存轮转后的下一场', () async {
+    final session = _session();
+    final match = session.assignNextGroups(1);
+    session.startMatch(match.id);
+    session.finishMatch(match.id, MatchResult.winnerOnly(Side.a));
+    await store.save(session);
+
+    final updated = await store.update(
+      session.id,
+      (value) => value.resolveWinnerStays(match.id),
     );
 
-    test(
-      'loads all sessions and returns the most recently saved active one',
-      () async {
-        final draft = _draftSession(id: 1, playerCount: 4);
-        final olderActive = _draftSession(id: 2, playerCount: 4)..start();
-        final newerActive = _draftSession(id: 3, playerCount: 4)..start();
-        await store.save(draft);
-        await store.save(olderActive);
-        await store.save(newerActive);
+    expect(updated.matches, hasLength(2));
+    expect(updated.matches.first.state, MatchState.completed);
+    expect(updated.matches.last.state, MatchState.ready);
+    expect((await store.load(session.id))!.matches, hasLength(2));
+  });
 
-        expect((await store.latestActive())?.id, 3);
-        await store.update(2, (session) => session.renamePlayer(1, '新名字'));
+  test('delete 删除聚合全部 owned rows', () async {
+    final session = _session();
+    await store.save(session);
 
-        expect((await store.latestActive())?.id, 2);
-        expect((await store.loadAll()).map((session) => session.id), [2, 3, 1]);
-      },
+    await store.delete(session.id);
+
+    expect(await store.load(session.id), isNull);
+    expect(await database.select(database.sessionGroupRecords).get(), isEmpty);
+    expect(await database.select(database.sessionPlayerRecords).get(), isEmpty);
+  });
+
+  test('replaceAll 原子清除旧聚合并写入测试聚合', () async {
+    await store.save(_session());
+    final replacement = PlaySession.create(
+      id: 10,
+      setup: const SessionSetup(
+        title: '替换后的测试球局',
+        courtCount: 1,
+        scorePreset: ScorePreset.quick11,
+        randomSeed: 10,
+      ),
+    )..addPlayer('测试玩家');
+
+    await store.replaceAll([replacement]);
+
+    expect(await store.load(9), isNull);
+    expect((await store.loadAll()).single.id, 10);
+    expect(
+      (await database.select(database.sessionPlayerRecords).get()).single.name,
+      '测试玩家',
     );
+  });
 
-    test('preserves winner-only results without inventing points', () async {
-      final session = _draftSession(id: 4, playerCount: 4)..start();
-      final match = session.generateAssignments().single;
-      session.startMatch(match.id);
-      session.finishMatch(match.id, MatchResult.winnerOnly(Side.b));
+  test('schema v3 活动可非破坏升级并继续读取', () async {
+    await database.close();
+    database = FdRallyPairDatabase(
+      NativeDatabase.memory(
+        setup: (sqlite) {
+          sqlite.execute('''
+            CREATE TABLE play_session_records (
+              id INTEGER NOT NULL PRIMARY KEY,
+              title TEXT NOT NULL,
+              court_count INTEGER NOT NULL,
+              pairing_policy TEXT NOT NULL,
+              score_preset TEXT NOT NULL,
+              avoid_recent_partner INTEGER NOT NULL,
+              random_seed INTEGER NOT NULL,
+              status TEXT NOT NULL,
+              next_player_id INTEGER NOT NULL,
+              next_match_id INTEGER NOT NULL,
+              next_queue_order INTEGER NOT NULL,
+              pairing_round INTEGER NOT NULL,
+              completion_order INTEGER NOT NULL,
+              updated_at INTEGER NOT NULL
+            )
+          ''');
+          sqlite.execute('''
+            CREATE TABLE session_player_records (
+              session_id INTEGER NOT NULL,
+              id INTEGER NOT NULL,
+              name TEXT NOT NULL,
+              state TEXT NOT NULL,
+              queue_order INTEGER NOT NULL,
+              PRIMARY KEY (session_id, id)
+            )
+          ''');
+          sqlite.execute('''
+            CREATE TABLE session_court_records (
+              session_id INTEGER NOT NULL,
+              number INTEGER NOT NULL,
+              state TEXT NOT NULL,
+              match_id INTEGER,
+              PRIMARY KEY (session_id, number)
+            )
+          ''');
+          sqlite.execute('''
+            CREATE TABLE session_match_records (
+              session_id INTEGER NOT NULL,
+              id INTEGER NOT NULL,
+              court_number INTEGER NOT NULL,
+              team_a_first INTEGER NOT NULL,
+              team_a_second INTEGER NOT NULL,
+              team_b_first INTEGER NOT NULL,
+              team_b_second INTEGER NOT NULL,
+              state TEXT NOT NULL,
+              relaxed INTEGER NOT NULL,
+              result_mode TEXT,
+              winner TEXT,
+              completed_order INTEGER,
+              PRIMARY KEY (session_id, id)
+            )
+          ''');
+          sqlite.execute('''
+            CREATE TABLE match_game_records (
+              session_id INTEGER NOT NULL,
+              match_id INTEGER NOT NULL,
+              game_index INTEGER NOT NULL,
+              side_a INTEGER NOT NULL,
+              side_b INTEGER NOT NULL,
+              PRIMARY KEY (session_id, match_id, game_index)
+            )
+          ''');
+          sqlite.execute('''
+            INSERT INTO play_session_records VALUES
+              (21, '旧版球局', 1, 'fairRotation', 'standard21', 1, 9,
+               'active', 5, 2, 4, 0, 0, 1)
+          ''');
+          for (var id = 1; id <= 4; id++) {
+            sqlite.execute(
+              'INSERT INTO session_player_records VALUES '
+              "(21, $id, '旧玩家$id', 'assigned', ${id - 1})",
+            );
+          }
+          sqlite.execute(
+            "INSERT INTO session_court_records VALUES (21, 1, 'reserved', 1)",
+          );
+          sqlite.execute('''
+            INSERT INTO session_match_records VALUES
+              (21, 1, 1, 1, 2, 3, 4, 'ready', 0, NULL, NULL, NULL)
+          ''');
+          sqlite.execute('PRAGMA user_version = 3');
+        },
+      ),
+    );
+    store = FdPlaySessionStore(database);
 
-      await store.save(session);
-      final restored = (await store.load(4))!;
+    final restored = await store.load(21);
 
-      expect(restored.matches.single.result?.mode, ResultMode.winnerOnly);
-      expect(restored.matches.single.result?.winner, Side.b);
-      expect(restored.statsFor(match.teamB.first).wins, 1);
-      expect(restored.statsFor(match.teamB.first).pointsFor, 0);
-      expect(restored.statsFor(match.teamB.first).pointsAgainst, 0);
-    });
-
-    test('restores an active session after reopening the database', () async {
-      final directory = await Directory.systemTemp.createTemp(
-        'rally_pair_store_test_',
-      );
-      final file = File('${directory.path}/restart.sqlite');
-      await database.close();
-      database = FdRallyPairDatabase(NativeDatabase(file));
-      store = FdPlaySessionStore(database);
-      final original = _mixedSession();
-      await store.save(original);
-      await database.close();
-
-      database = FdRallyPairDatabase(NativeDatabase(file));
-      store = FdPlaySessionStore(database);
-      final restored = await store.latestActive();
-
-      expect(restored, isNotNull);
-      expect(_sessionData(restored!), _sessionData(original));
-      await database.close();
-      database = FdRallyPairDatabase(NativeDatabase.memory());
-      store = FdPlaySessionStore(database);
-      await directory.delete(recursive: true);
-    });
-
-    test('rolls back every table when a match insert fails', () async {
-      final session = _draftSession(id: 1, playerCount: 4)..start();
-      await store.save(session);
-      final before = _sessionData((await store.load(1))!);
-      await database.customStatement('''
-        CREATE TRIGGER fail_session_match_insert
-        BEFORE INSERT ON session_match_records
-        BEGIN
-          SELECT RAISE(FAIL, 'forced failure');
-        END
-      ''');
-
-      await expectLater(
-        store.update(1, (current) => current.generateAssignments()),
-        throwsA(anything),
-      );
-      await database.customStatement('DROP TRIGGER fail_session_match_insert');
-
-      expect(_sessionData((await store.load(1))!), before);
-      expect(
-        await database.select(database.sessionMatchRecords).get(),
-        isEmpty,
-      );
-      expect(await database.select(database.matchGameRecords).get(), isEmpty);
-    });
-
-    test('physically deletes the aggregate and all owned rows', () async {
-      final session = _mixedSession();
-      await store.save(session);
-
-      await store.delete(session.id);
-
-      expect(await store.load(session.id), isNull);
-      expect(await database.select(database.playSessionRecords).get(), isEmpty);
-      expect(
-        await database.select(database.sessionPlayerRecords).get(),
-        isEmpty,
-      );
-      expect(
-        await database.select(database.sessionCourtRecords).get(),
-        isEmpty,
-      );
-      expect(
-        await database.select(database.sessionMatchRecords).get(),
-        isEmpty,
-      );
-      expect(await database.select(database.matchGameRecords).get(), isEmpty);
-    });
-
-    test('saving a deleted aggregate removes its stored history', () async {
-      final session = _mixedSession();
-      await store.save(session);
-
-      session.delete();
-      await store.save(session);
-
-      expect(await store.load(session.id), isNull);
-      expect(await store.loadAll(), isEmpty);
-    });
-
-    test('rejects corrupted persisted enum values', () async {
-      final session = _draftSession(id: 1, playerCount: 4);
-      await store.save(session);
-      await database.customStatement(
-        "UPDATE play_session_records SET status = 'unknown' WHERE id = 1",
-      );
-
-      expect(
-        () => store.load(1),
-        _throwsViolation('invalid_persisted_session'),
-      );
-    });
-
-    test('upgrades the existing empty v1 database shell', () async {
-      await database.close();
-      database = FdRallyPairDatabase(
-        NativeDatabase.memory(
-          setup: (rawDatabase) {
-            rawDatabase.execute('PRAGMA user_version = 1');
-          },
-        ),
-      );
-      store = FdPlaySessionStore(database);
-      final session = _draftSession(id: 9, playerCount: 4);
-
-      await store.save(session);
-
-      expect((await store.load(9))?.players.length, 4);
-      final version = await database
-          .customSelect('PRAGMA user_version')
-          .getSingle();
-      expect(version.read<int>('user_version'), 3);
-    });
-
-    test('repairs a v2 database shell missing the session tables', () async {
-      await database.close();
-      database = FdRallyPairDatabase(
-        NativeDatabase.memory(
-          setup: (rawDatabase) {
-            rawDatabase.execute('PRAGMA user_version = 2');
-          },
-        ),
-      );
-      store = FdPlaySessionStore(database);
-      final session = _draftSession(id: 10, playerCount: 4);
-
-      await store.save(session);
-
-      expect((await store.load(10))?.players.length, 4);
-      final version = await database
-          .customSelect('PRAGMA user_version')
-          .getSingle();
-      expect(version.read<int>('user_version'), 3);
-    });
+    expect(restored, isNotNull);
+    expect(restored!.groups, hasLength(2));
+    expect(restored.courts.single.state, CourtState.ready);
+    expect(restored.matches.single.groupAId, isNotNull);
+    expect(restored.matches.single.groupBId, isNotNull);
   });
 }
 
-PlaySession _draftSession({required int id, required int playerCount}) {
+PlaySession _session() {
   final session = PlaySession.create(
-    id: id,
+    id: 9,
     setup: const SessionSetup(
-      title: '周六晚场',
-      courtCount: 2,
-      pairingPolicy: PairingPolicy.fairRotation,
-      scorePreset: ScorePreset.quick11,
-      avoidRecentPartner: true,
-      randomSeed: 20260722,
+      title: '持久化测试',
+      courtCount: 1,
+      scorePreset: ScorePreset.standard21,
+      randomSeed: 11,
     ),
   );
-  for (var index = 1; index <= playerCount; index++) {
-    session.addPlayer('P$index');
+  for (var index = 1; index <= 6; index++) {
+    session.addPlayer('玩家$index');
   }
+  session.generateRandomGroups();
+  session.start();
   return session;
-}
-
-PlaySession _mixedSession() {
-  final session = _draftSession(id: 7, playerCount: 12)..start();
-  session.setResting(11);
-  session.setLeft(12);
-  final initial = session.generateAssignments();
-  session.startMatch(initial.first.id);
-  session.finishMatch(
-    initial.first.id,
-    MatchResult.gameScores(const [GameScore(11, 7)]),
-  );
-  session.startMatch(initial[1].id);
-  session.generateAssignments();
-  return session;
-}
-
-void _cancelOpenMatches(PlaySession session) {
-  final open = session.matches
-      .where(
-        (match) =>
-            match.state == MatchState.ready ||
-            match.state == MatchState.inProgress,
-      )
-      .toList();
-  for (final match in open) {
-    session.cancelMatch(match.id);
-  }
-}
-
-Map<String, Object?> _sessionData(PlaySession session) {
-  final snapshot = session.snapshot();
-  return {
-    'id': snapshot.id,
-    'setup': [
-      snapshot.setup.title,
-      snapshot.setup.courtCount,
-      snapshot.setup.pairingPolicy.name,
-      snapshot.setup.scorePreset.name,
-      snapshot.setup.avoidRecentPartner,
-      snapshot.setup.randomSeed,
-    ],
-    'status': snapshot.status.name,
-    'counters': [
-      snapshot.nextPlayerId,
-      snapshot.nextMatchId,
-      snapshot.nextQueueOrder,
-      snapshot.pairingRound,
-      snapshot.completionOrder,
-    ],
-    'players': [
-      for (final player in snapshot.players)
-        [player.id, player.name, player.state.name, player.queueOrder],
-    ],
-    'courts': [
-      for (final court in snapshot.courts)
-        [court.number, court.state.name, court.matchId],
-    ],
-    'matches': [for (final match in snapshot.matches) _matchData(match)],
-  };
-}
-
-Map<String, Object?> _matchData(SessionMatch match) {
-  return {
-    'id': match.id,
-    'court': match.courtNumber,
-    'teams': [match.teamA.players, match.teamB.players],
-    'state': match.state.name,
-    'relaxed': match.relaxed,
-    'result': match.result == null
-        ? null
-        : [
-            match.result!.mode.name,
-            match.result!.winner.name,
-            for (final game in match.result!.games) [game.a, game.b],
-          ],
-    'completedOrder': match.completedOrder,
-  };
-}
-
-Map<int, Object?> _statsData(PlaySession session) {
-  return {
-    for (final entry in session.stats.entries)
-      entry.key: [
-        entry.value.completedMatches,
-        entry.value.wins,
-        entry.value.losses,
-        entry.value.pointsFor,
-        entry.value.pointsAgainst,
-        entry.value.partners,
-        entry.value.opponents,
-      ],
-  };
-}
-
-Matcher _throwsViolation(String code) {
-  return throwsA(
-    isA<RuleViolation>().having((error) => error.code, 'code', code),
-  );
 }

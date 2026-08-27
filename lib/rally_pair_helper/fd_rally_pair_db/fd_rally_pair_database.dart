@@ -10,6 +10,7 @@ part 'fd_rally_pair_database.g.dart';
   tables: <Type>[
     PlaySessionRecords,
     SessionPlayerRecords,
+    SessionGroupRecords,
     SessionCourtRecords,
     SessionMatchRecords,
     MatchGameRecords,
@@ -20,7 +21,7 @@ class FdRallyPairDatabase extends _$FdRallyPairDatabase {
     : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration {
@@ -29,6 +30,9 @@ class FdRallyPairDatabase extends _$FdRallyPairDatabase {
       onUpgrade: (migrator, from, to) async {
         if (from < 3) {
           await _createMissingSessionTables(migrator);
+        }
+        if (from >= 3 && from < 4) {
+          await _upgradeSessionModel(migrator);
         }
       },
     );
@@ -44,12 +48,40 @@ class FdRallyPairDatabase extends _$FdRallyPairDatabase {
     if (!await _hasTable('session_court_records')) {
       await migrator.createTable(sessionCourtRecords);
     }
+    if (!await _hasTable('session_group_records')) {
+      await migrator.createTable(sessionGroupRecords);
+    }
     if (!await _hasTable('session_match_records')) {
       await migrator.createTable(sessionMatchRecords);
     }
     if (!await _hasTable('match_game_records')) {
       await migrator.createTable(matchGameRecords);
     }
+  }
+
+  Future<void> _upgradeSessionModel(Migrator migrator) async {
+    if (!await _hasTable('session_group_records')) {
+      await migrator.createTable(sessionGroupRecords);
+    }
+    await migrator.addColumn(
+      playSessionRecords,
+      playSessionRecords.defaultRotationMode,
+    );
+    await migrator.addColumn(
+      playSessionRecords,
+      playSessionRecords.nextGroupId,
+    );
+    await migrator.addColumn(sessionCourtRecords, sessionCourtRecords.name);
+    await migrator.addColumn(
+      sessionCourtRecords,
+      sessionCourtRecords.stayingGroupId,
+    );
+    await migrator.addColumn(sessionMatchRecords, sessionMatchRecords.groupAId);
+    await migrator.addColumn(sessionMatchRecords, sessionMatchRecords.groupBId);
+    await migrator.addColumn(
+      sessionMatchRecords,
+      sessionMatchRecords.rotationMode,
+    );
   }
 
   Future<bool> _hasTable(String name) async {

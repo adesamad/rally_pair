@@ -51,7 +51,7 @@ final class ScoreRules {
     final low = game.a < game.b ? game.a : game.b;
     if (high == 21) return low <= 19;
     if (high >= 22 && high <= 29) return high - low == 2;
-    if (high == 30) return low == 28 || low == 29;
+    if (high == 30) return low == 29;
     return false;
   }
 }

@@ -12,4 +12,6 @@ abstract interface class PlaySessionStore {
   Future<PlaySession> update(int id, void Function(PlaySession session) change);
 
   Future<void> delete(int id);
+
+  Future<void> replaceAll(Iterable<PlaySession> sessions);
 }

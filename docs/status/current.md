@@ -5,6 +5,7 @@ doc_profile: docs-keeper
 ## Read First
 
 - [羽搭 / RallyPair 产品方向基线](../knowledge/product/badminton-session-organizer.md)
+- [双人组、场地与上下场轮转运行模型决策](../decisions/group-court-rotation-runtime-direction.md)
 - [图标库视觉方向决策](../decisions/icon-library-visual-direction.md)
 - [第一批语义图标 HTML 图标墙](../work/icon_library/rally-pair-icon-batch-01.html)
 - [图标与配色 HTML 风格板](../work/icon_library/rally-pair-icon-palette-preview.html)
@@ -14,6 +15,7 @@ doc_profile: docs-keeper
 
 | work | state | read first | next |
 | --- | --- | --- | --- |
+| product_logic_realignment | done | docs/work/product_logic_realignment/runtime-realignment-plan.md、docs/work/product_logic_realignment/runtime-realignment-execution-spec.md | 在真实设备复核具象场地、长名单与轮转操作手感；后续功能沿用当前运行模型 |
 | framework_migration | done | docs/work/framework_migration/code-move-constraint-report.md | 迁移框架保持独立模块；真实 App 入口由后续业务实现负责 |
 | icon_library | doing | docs/work/icon_library/rally-pair-icon-batch-01.html | 审阅第一批 12 个 SVG 图标，淘汰或修订 24px 下识别不足的图案 |
 
@@ -22,6 +24,7 @@ doc_profile: docs-keeper
 | domain | file | document_state |
 | --- | --- | --- |
 | product | docs/knowledge/product/badminton-session-organizer.md | accepted |
+| runtime_model | docs/decisions/group-court-rotation-runtime-direction.md | accepted |
 | icon_design | docs/decisions/icon-library-visual-direction.md | accepted |
 
 ## Archived Releases
@@ -30,6 +33,10 @@ doc_profile: docs-keeper
 
 ## Recent Changes
 
+- 2026-08-27：完成 P1–P7 运行模型替换：固定双人组、组队列、具名场地、具象 Court UI、比分记录、胜方留场/两组下场、历史修正与球局收尾均已接入，schema v3→v4 非破坏迁移和全量 Flutter tests 通过。
+- 2026-08-27：生成运行模型替换 Plan Spec 与 Execution Spec，将 31 个 runtime action 拆为 7 个可见 vertical slice，并冻结非破坏 schema v4 兼容策略。
+- 2026-08-27：将产品基线从个人候场与临时队伍修订为持续双人组、组候场队列、分场地比分和 winner_stays / all_rotate 双模式轮转。
+- 2026-08-27：确认具象化羽毛球场为 CourtWorkspace 核心业务对象，禁止继续用仅含 A/B 文本的普通卡片作为最终场地表达。
 - 2026-08-24：删除无真实消费者且与 App 入口职责重复的 `am_rally_pair_main`；迁移范围不再包含第二套 App 根壳和启动接线。
 - 2026-08-24：按模板原目录归属重新整理迁移模块，仅叠加已冻结前缀与 `rally_pair` 关键字；移除误加的 `lib/app`、`lib/shared` 分层。
 - 2026-08-24：按模板迁移指南完成日志、Dio、网络、App 配置、路由、Hive、Drift、输入、弹层、权限与媒体共 11 个独立模块迁移；Android/iOS 构建通过。

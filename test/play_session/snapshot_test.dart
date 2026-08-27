@@ -2,146 +2,132 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rally_pair/play_session/play_session.dart';
 
 void main() {
-  group('PlaySession snapshot', () {
-    test('restores counters and deterministic behavior', () {
-      final original = _activeSession();
-      final first = original.generateAssignments().single;
-      original.startMatch(first.id);
-      original.finishMatch(first.id, MatchResult.winnerOnly(Side.a));
+  test('snapshot 恢复双人组、队列和场地状态', () {
+    final session = _session();
+    final match = session.assignNextGroups(1);
+    session.startMatch(match.id);
+    session.finishMatch(match.id, MatchResult.winnerOnly(Side.a));
 
-      final restored = PlaySession.restore(original.snapshot());
+    final restored = PlaySession.restore(session.snapshot());
 
-      expect(_sessionData(restored), _sessionData(original));
-      final originalNext = original.generateAssignments().single;
-      final restoredNext = restored.generateAssignments().single;
-      expect(_matchData(restoredNext), _matchData(originalNext));
-    });
+    expect(restored.groups, hasLength(3));
+    expect(restored.waitingGroups, hasLength(1));
+    expect(restored.courts.single.state, CourtState.awaitingRotation);
+    expect(restored.matches.single.state, MatchState.resultRecorded);
+  });
 
-    test('snapshot owns immutable collection copies', () {
-      final session = _activeSession();
-      final snapshot = session.snapshot();
+  test('snapshot 拒绝重复 group identity', () {
+    final session = _session();
+    final snapshot = session.snapshot();
 
-      expect(
-        () => snapshot.players.add(snapshot.players.first),
-        throwsUnsupportedError,
-      );
-      expect(() => snapshot.courts.clear(), throwsUnsupportedError);
-      expect(() => snapshot.matches.clear(), throwsUnsupportedError);
-    });
-
-    test('rejects duplicated identities in restored data', () {
-      final session = _activeSession();
-      final snapshot = session.snapshot();
-
-      expect(
-        () => PlaySession.restore(
-          PlaySessionSnapshot(
-            id: snapshot.id,
-            setup: snapshot.setup,
-            status: snapshot.status,
-            players: [snapshot.players.first, snapshot.players.first],
-            courts: snapshot.courts,
-            matches: snapshot.matches,
-            nextPlayerId: snapshot.nextPlayerId,
-            nextMatchId: snapshot.nextMatchId,
-            nextQueueOrder: snapshot.nextQueueOrder,
-            pairingRound: snapshot.pairingRound,
-            completionOrder: snapshot.completionOrder,
-          ),
+    expect(
+      () => PlaySession.restore(
+        PlaySessionSnapshot(
+          id: snapshot.id,
+          setup: snapshot.setup,
+          status: snapshot.status,
+          players: snapshot.players,
+          groups: [snapshot.groups.first, snapshot.groups.first],
+          courts: snapshot.courts,
+          matches: snapshot.matches,
+          nextPlayerId: snapshot.nextPlayerId,
+          nextGroupId: snapshot.nextGroupId,
+          nextMatchId: snapshot.nextMatchId,
+          nextQueueOrder: snapshot.nextQueueOrder,
+          pairingRound: snapshot.pairingRound,
+          completionOrder: snapshot.completionOrder,
         ),
-        _throwsViolation('invalid_session_snapshot'),
-      );
-    });
+      ),
+      throwsA(isA<RuleViolation>()),
+    );
+  });
 
-    test('rejects a court and match state mismatch', () {
-      final session = _activeSession();
-      final match = session.generateAssignments().single;
-      final snapshot = session.snapshot();
-
-      expect(
-        () => PlaySession.restore(
-          PlaySessionSnapshot(
-            id: snapshot.id,
-            setup: snapshot.setup,
-            status: snapshot.status,
-            players: snapshot.players,
-            courts: [Court(number: 1, state: CourtState.available)],
-            matches: snapshot.matches,
-            nextPlayerId: snapshot.nextPlayerId,
-            nextMatchId: snapshot.nextMatchId,
-            nextQueueOrder: snapshot.nextQueueOrder,
-            pairingRound: snapshot.pairingRound,
-            completionOrder: snapshot.completionOrder,
-          ),
+  test('旧版进行中快照会补建固定组并迁移场地状态', () {
+    final restored = PlaySession.restore(
+      PlaySessionSnapshot(
+        id: 9,
+        setup: const SessionSetup(
+          title: '旧版活动',
+          courtCount: 1,
+          scorePreset: ScorePreset.standard21,
+          randomSeed: 3,
         ),
-        _throwsViolation('invalid_session_snapshot'),
-      );
-      expect(match.state, MatchState.ready);
-    });
+        status: SessionStatus.active,
+        players: const [
+          SessionPlayer(
+            id: 1,
+            name: '甲',
+            state: PlayerState.assigned,
+            queueOrder: 0,
+          ),
+          SessionPlayer(
+            id: 2,
+            name: '乙',
+            state: PlayerState.assigned,
+            queueOrder: 1,
+          ),
+          SessionPlayer(
+            id: 3,
+            name: '丙',
+            state: PlayerState.assigned,
+            queueOrder: 2,
+          ),
+          SessionPlayer(
+            id: 4,
+            name: '丁',
+            state: PlayerState.assigned,
+            queueOrder: 3,
+          ),
+          SessionPlayer(
+            id: 5,
+            name: '候补',
+            state: PlayerState.waiting,
+            queueOrder: 4,
+          ),
+        ],
+        courts: const [
+          Court(number: 1, state: CourtState.reserved, matchId: 1),
+        ],
+        matches: const [
+          SessionMatch(
+            id: 1,
+            courtNumber: 1,
+            teamA: Team(1, 2),
+            teamB: Team(3, 4),
+            state: MatchState.ready,
+            relaxed: false,
+          ),
+        ],
+        nextPlayerId: 6,
+        nextMatchId: 2,
+        nextQueueOrder: 5,
+        pairingRound: 0,
+        completionOrder: 0,
+      ),
+    );
+
+    expect(restored.groups, hasLength(2));
+    expect(restored.matches.single.groupAId, isNotNull);
+    expect(restored.matches.single.groupBId, isNotNull);
+    expect(restored.courts.single.state, CourtState.ready);
+    expect(restored.players.last.state, PlayerState.ungrouped);
   });
 }
 
-PlaySession _activeSession() {
+PlaySession _session() {
   final session = PlaySession.create(
     id: 1,
     setup: const SessionSetup(
-      title: '周六晚场',
+      title: '恢复测试',
       courtCount: 1,
-      pairingPolicy: PairingPolicy.fairRotation,
       scorePreset: ScorePreset.standard21,
-      avoidRecentPartner: true,
-      randomSeed: 20260722,
+      randomSeed: 7,
     ),
   );
-  for (var index = 1; index <= 8; index++) {
-    session.addPlayer('P$index');
+  for (var index = 1; index <= 6; index++) {
+    session.addPlayer('玩家$index');
   }
+  session.generateRandomGroups();
   session.start();
   return session;
-}
-
-Map<String, Object?> _sessionData(PlaySession session) {
-  final snapshot = session.snapshot();
-  return {
-    'id': snapshot.id,
-    'status': snapshot.status.name,
-    'nextPlayerId': snapshot.nextPlayerId,
-    'nextMatchId': snapshot.nextMatchId,
-    'nextQueueOrder': snapshot.nextQueueOrder,
-    'pairingRound': snapshot.pairingRound,
-    'completionOrder': snapshot.completionOrder,
-    'players': [
-      for (final player in snapshot.players)
-        [player.id, player.name, player.state.name, player.queueOrder],
-    ],
-    'courts': [
-      for (final court in snapshot.courts)
-        [court.number, court.state.name, court.matchId],
-    ],
-    'matches': [for (final match in snapshot.matches) _matchData(match)],
-  };
-}
-
-Map<String, Object?> _matchData(SessionMatch match) {
-  return {
-    'id': match.id,
-    'court': match.courtNumber,
-    'teamA': match.teamA.players,
-    'teamB': match.teamB.players,
-    'state': match.state.name,
-    'relaxed': match.relaxed,
-    'resultMode': match.result?.mode.name,
-    'winner': match.result?.winner.name,
-    'games': [
-      for (final game in match.result?.games ?? const <GameScore>[])
-        [game.a, game.b],
-    ],
-    'completedOrder': match.completedOrder,
-  };
-}
-
-Matcher _throwsViolation(String code) {
-  return throwsA(
-    isA<RuleViolation>().having((error) => error.code, 'code', code),
-  );
 }

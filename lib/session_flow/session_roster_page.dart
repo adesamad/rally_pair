@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../play_session/play_session.dart';
 import '../rally_pair_icon.dart';
 import '../rally_pair_theme.dart';
+import '../session_library/session_setup_page.dart';
 import 'live_session_page.dart';
 import 'player_input_dialogs.dart';
 import 'rule_violation_message.dart';
@@ -99,6 +100,84 @@ class _SessionRosterPageState extends State<SessionRosterPage> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _addCourt() async {
+    final name = await showPlayerNameDialog(
+      context,
+      title: '添加场地',
+      confirmLabel: '添加',
+      fieldLabel: '场地名称',
+    );
+    if (!mounted || name == null) return;
+    await _update((session) => session.addCourt(name));
+  }
+
+  Future<void> _removeCourt(Court court) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('移除场地？'),
+        content: Text('将空闲场地“${court.name}”从本场移除。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('确认移除'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    await _update((session) => session.removeCourt(court.number));
+  }
+
+  Future<void> _randomGroups() async {
+    await _update((session) => session.generateRandomGroups());
+  }
+
+  Future<void> _manualGroup() async {
+    final session = _session;
+    if (session == null) return;
+    final players = session.players
+        .where((player) => player.state == PlayerState.ungrouped)
+        .toList();
+    if (players.length < 2) return;
+    final selected = await showManualGroupDialog(context, players);
+    if (!mounted || selected == null) return;
+    await _update((value) => value.createManualGroup(selected.$1, selected.$2));
+  }
+
+  Future<void> _replaceGroupPlayer(PairingGroup group) async {
+    final session = _session;
+    if (session == null) return;
+    final current = session.players
+        .where((player) => group.contains(player.id))
+        .toList(growable: false);
+    final replacements = session.players
+        .where((player) => player.state == PlayerState.ungrouped)
+        .toList(growable: false);
+    final selected = await showGroupMemberReplacementDialog(
+      context,
+      group: group,
+      currentPlayers: current,
+      replacements: replacements,
+    );
+    if (!mounted || selected == null) return;
+    await _update(
+      (value) => value.updateGroup(
+        groupId: group.id,
+        sourcePlayerId: selected.$1,
+        replacementPlayerId: selected.$2,
+      ),
+    );
+  }
+
+  Future<void> _dissolveGroup(PairingGroup group) async {
+    await _update((session) => session.dissolveGroup(group.id));
+  }
+
   Future<void> _renamePlayer(SessionPlayer player) async {
     final name = await showPlayerNameDialog(
       context,
@@ -150,11 +229,33 @@ class _SessionRosterPageState extends State<SessionRosterPage> {
     );
   }
 
+  Future<void> _editSetup() async {
+    final session = _session;
+    if (session == null || session.status != SessionStatus.draft) return;
+    final setup = await Navigator.of(context).push<SessionSetup>(
+      MaterialPageRoute(
+        builder: (_) => SessionSetupPage(initialSetup: session.setup),
+      ),
+    );
+    if (!mounted || setup == null) return;
+    await _update((value) => value.updateSetup(setup));
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = _session;
     return Scaffold(
-      appBar: AppBar(title: Text(session?.setup.title ?? '玩家名单')),
+      appBar: AppBar(
+        title: Text(session?.setup.title ?? '玩家名单'),
+        actions: [
+          if (session?.status == SessionStatus.draft)
+            TextButton(
+              onPressed: _busy ? null : _editSetup,
+              child: const Text('设置'),
+            ),
+          const SizedBox(width: 8),
+        ],
+      ),
       bottomNavigationBar: session == null || _loading || _error != null
           ? null
           : _RosterBottomAction(
@@ -175,6 +276,12 @@ class _SessionRosterPageState extends State<SessionRosterPage> {
             busy: _busy,
             onAdd: _addPlayer,
             onBatchAdd: _batchAdd,
+            onAddCourt: _addCourt,
+            onRemoveCourt: _removeCourt,
+            onRandomGroups: _randomGroups,
+            onManualGroup: _manualGroup,
+            onReplaceGroupPlayer: _replaceGroupPlayer,
+            onDissolveGroup: _dissolveGroup,
             onRename: _renamePlayer,
             onRemove: _removePlayer,
           ),
@@ -191,6 +298,12 @@ class _RosterContent extends StatelessWidget {
     required this.busy,
     required this.onAdd,
     required this.onBatchAdd,
+    required this.onAddCourt,
+    required this.onRemoveCourt,
+    required this.onRandomGroups,
+    required this.onManualGroup,
+    required this.onReplaceGroupPlayer,
+    required this.onDissolveGroup,
     required this.onRename,
     required this.onRemove,
   });
@@ -199,6 +312,12 @@ class _RosterContent extends StatelessWidget {
   final bool busy;
   final VoidCallback onAdd;
   final VoidCallback onBatchAdd;
+  final VoidCallback onAddCourt;
+  final ValueChanged<Court> onRemoveCourt;
+  final VoidCallback onRandomGroups;
+  final VoidCallback onManualGroup;
+  final ValueChanged<PairingGroup> onReplaceGroupPlayer;
+  final ValueChanged<PairingGroup> onDissolveGroup;
   final ValueChanged<SessionPlayer> onRename;
   final ValueChanged<SessionPlayer> onRemove;
 
@@ -246,6 +365,101 @@ class _RosterContent extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Text('场地', style: Theme.of(context).textTheme.titleLarge),
+                    const Spacer(),
+                    TextButton(
+                      key: const ValueKey('add-court'),
+                      onPressed: busy ? null : onAddCourt,
+                      child: const Text('添加场地'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                for (final court in session.courts)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        color: RallyPairColors.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: RallyPairColors.outline),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              court.name,
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: busy ? null : () => onRemoveCourt(court),
+                            child: const Text('移除'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 16),
+                Text('双人组', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton(
+                        key: const ValueKey('random-groups'),
+                        onPressed: busy ? null : onRandomGroups,
+                        child: const Text('随机组队'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton(
+                        key: const ValueKey('manual-group'),
+                        onPressed: busy ? null : onManualGroup,
+                        child: const Text('手动组队'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                for (final group in session.groups.where(
+                  (group) => group.state == GroupState.waiting,
+                ))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${session.players.firstWhere((p) => p.id == group.firstPlayerId).name} · ${session.players.firstWhere((p) => p.id == group.secondPlayerId).name}',
+                          ),
+                        ),
+                        TextButton(
+                          onPressed:
+                              busy ||
+                                  !session.players.any(
+                                    (player) =>
+                                        player.state == PlayerState.ungrouped,
+                                  )
+                              ? null
+                              : () => onReplaceGroupPlayer(group),
+                          child: const Text('换人'),
+                        ),
+                        TextButton(
+                          onPressed: busy ? null : () => onDissolveGroup(group),
+                          child: const Text('解散'),
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 16),
                 Row(
                   children: [
                     Text('本场名单', style: Theme.of(context).textTheme.titleLarge),
@@ -420,9 +634,10 @@ class _RosterBottomAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final missing = 4 - session.waitingPlayers.length;
+    final missingGroups = 2 - session.waitingGroups.length;
     final active = session.status == SessionStatus.active;
-    final enabled = !busy && (active || missing <= 0);
+    final enabled =
+        !busy && (active || (missingGroups <= 0 && session.courts.isNotEmpty));
     return SafeArea(
       top: false,
       child: Container(
@@ -438,8 +653,8 @@ class _RosterBottomAction extends StatelessWidget {
                 ? '正在保存…'
                 : active
                 ? '进入现场球局'
-                : missing > 0
-                ? '还需 $missing 名玩家'
+                : missingGroups > 0
+                ? '还需 $missingGroups 个双人组'
                 : '启动球局',
           ),
         ),

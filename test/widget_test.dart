@@ -1,226 +1,205 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rally_pair/play_session/play_session.dart';
-import 'package:rally_pair/rally_pair_app.dart';
+import 'package:rally_pair/session_library/session_library_page.dart';
+import 'package:rally_pair/session_flow/live_session_page.dart';
+import 'package:rally_pair/session_flow/session_roster_page.dart';
 
 void main() {
-  testWidgets('创建球局后进入玩家名单并可添加玩家', (tester) async {
-    final store = _MemoryStore();
-    await tester.pumpWidget(RallyPairApp(store: store));
+  testWidgets('准备页提供随机和手动组队，并按双人组启用开局', (tester) async {
+    final session = _draft(4)..generateRandomGroups();
+    final store = _MemoryStore(session);
+
+    await tester.pumpWidget(
+      MaterialApp(home: SessionRosterPage(store: store, sessionId: 1)),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.text('从第一场球局开始'), findsOneWidget);
-    await tester.tap(find.text('新建球局').last);
-    await tester.pumpAndSettle();
-
-    await tester.enterText(find.byType(TextField), '周六晚场');
-    await tester.tap(find.text('创建球局'));
-    await tester.pumpAndSettle();
-
-    expect(store.sessions.single.setup.title, '周六晚场');
-    expect(find.text('准备本场玩家'), findsOneWidget);
-    expect(find.text('周六晚场'), findsOneWidget);
-    expect(find.text('还需 4 名玩家'), findsOneWidget);
-
-    await tester.tap(find.text('添加玩家'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), '小林');
-    await tester.tap(find.text('添加'));
-    await tester.pumpAndSettle();
-
-    expect(store.sessions.single.players.single.name, '小林');
-    expect(find.text('还需 3 名玩家'), findsOneWidget);
-  });
-
-  testWidgets('读取失败后可以重试', (tester) async {
-    final store = _MemoryStore(failFirstLoad: true);
-    await tester.pumpWidget(RallyPairApp(store: store));
-    await tester.pumpAndSettle();
-
-    expect(find.text('暂时无法读取球局'), findsOneWidget);
-    await tester.tap(find.text('重新读取'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('从第一场球局开始'), findsOneWidget);
-    expect(store.loadCount, 2);
-  });
-
-  testWidgets('球局状态同时使用文字和视觉标记', (tester) async {
-    final active = PlaySession.create(id: 1, setup: _setup('单位训练'));
-    active
-      ..addPlayer('甲')
-      ..addPlayer('乙')
-      ..addPlayer('丙')
-      ..addPlayer('丁')
-      ..start();
-    final store = _MemoryStore()..sessions.add(active);
-
-    await tester.pumpWidget(RallyPairApp(store: store));
-    await tester.pumpAndSettle();
-
-    expect(find.text('进行中的球局'), findsOneWidget);
-    expect(find.text('进行中'), findsOneWidget);
-    expect(find.text('4 人'), findsOneWidget);
-  });
-
-  testWidgets('草稿可以批量添加四人并启动现场球局', (tester) async {
-    final draft = PlaySession.create(id: 1, setup: _setup('周中训练'));
-    final store = _MemoryStore()..sessions.add(draft);
-    await tester.pumpWidget(RallyPairApp(store: store));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('周中训练'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('批量添加'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), '甲\n乙\n丙\n丁');
-    await tester.tap(find.text('加入名单'));
-    await tester.pumpAndSettle();
-
+    expect(find.byKey(const ValueKey('random-groups')), findsOneWidget);
+    expect(find.byKey(const ValueKey('manual-group')), findsOneWidget);
     expect(find.text('启动球局'), findsOneWidget);
-    await tester.tap(find.text('启动球局'));
-    await tester.pumpAndSettle();
-
-    expect(store.sessions.single.status, SessionStatus.active);
-    expect(find.text('现场球场'), findsOneWidget);
-    expect(find.text('球场'), findsOneWidget);
-    expect(find.text('结果'), findsOneWidget);
+    expect(find.textContaining('玩家'), findsWidgets);
   });
 
-  testWidgets('玩家名单支持改名和确认移除', (tester) async {
-    final draft = PlaySession.create(id: 1, setup: _setup('名单调整'))
-      ..addPlayer('旧名字');
-    final store = _MemoryStore()..sessions.add(draft);
-    await tester.pumpWidget(RallyPairApp(store: store));
+  testWidgets('现场页用具象球场显示两侧四人和比赛动作', (tester) async {
+    final session = _draft(4)..generateRandomGroups();
+    session.start();
+    final match = session.assignNextGroups(1);
+    session.startMatch(match.id);
+    final store = _MemoryStore(session);
+
+    await tester.pumpWidget(
+      MaterialApp(home: LiveSessionPage(store: store, sessionId: 1)),
+    );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('名单调整'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('改名'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), '新名字');
-    await tester.tap(find.text('保存'));
-    await tester.pumpAndSettle();
-
-    expect(store.sessions.single.players.single.name, '新名字');
-    await tester.tap(find.text('移除'));
-    await tester.pumpAndSettle();
-    expect(find.text('移除玩家？'), findsOneWidget);
-    await tester.tap(find.text('确认移除'));
-    await tester.pumpAndSettle();
-
-    expect(store.sessions.single.players, isEmpty);
-    expect(find.text('名单还是空的'), findsOneWidget);
+    expect(find.byKey(ValueKey('court-surface-${match.id}')), findsOneWidget);
+    for (var index = 1; index <= 4; index++) {
+      expect(find.text('玩家$index'), findsOneWidget);
+    }
+    expect(find.text('录入胜方'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
-  testWidgets('现场球局可以生成分组开赛并录入胜方', (tester) async {
-    final active = PlaySession.create(id: 1, setup: _setup('完整流程'))
-      ..addPlayer('甲')
-      ..addPlayer('乙')
-      ..addPlayer('丙')
-      ..addPlayer('丁')
-      ..start();
-    final store = _MemoryStore()..sessions.add(active);
-    await tester.pumpWidget(RallyPairApp(store: store));
+  testWidgets('窄屏放大文字下具象球场不溢出', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final session = _draft(4)..generateRandomGroups();
+    session.start();
+    session.assignNextGroups(1);
+
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(1.5)),
+        child: MaterialApp(
+          home: LiveSessionPage(store: _MemoryStore(session), sessionId: 1),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('完整流程'));
+    expect(find.byKey(const ValueKey('court-surface-1')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('球场姓名标签保持紧凑并留出主要场线', (tester) async {
+    final session = _draft(4)..generateRandomGroups();
+    session.start();
+    final match = session.assignNextGroups(1);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LiveSessionPage(store: _MemoryStore(session), sessionId: 1),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final courtSize = tester.getSize(
+      find.byKey(ValueKey('court-surface-${match.id}')),
+    );
+    final labelSize = tester.getSize(
+      find
+          .ancestor(
+            of: find.text('玩家1'),
+            matching: find.byType(FractionallySizedBox),
+          )
+          .first,
+    );
+
+    expect(labelSize.width / courtSize.width, lessThanOrEqualTo(.28));
+    expect(labelSize.height / courtSize.height, lessThanOrEqualTo(.2));
+  });
+
+  testWidgets('现场分组页可继续组队并手动指定场地与两组', (tester) async {
+    final session = _draft(6)..generateRandomGroups();
+    session.start();
+    session.addPlayer('临时甲');
+    session.addPlayer('临时乙');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LiveSessionPage(store: _MemoryStore(session), sessionId: 1),
+      ),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('分组'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('生成分组'));
-    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('assign-specific-groups')),
+      220,
+    );
 
-    expect(store.sessions.single.matches.single.state, MatchState.ready);
-    await tester.tap(find.text('球场'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('开始比赛'));
-    await tester.pumpAndSettle();
-    expect(store.sessions.single.matches.single.state, MatchState.inProgress);
-
-    await tester.tap(find.text('录入胜方'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('A 组获胜'));
-    await tester.pumpAndSettle();
-    expect(store.sessions.single.matches.single.state, MatchState.completed);
-
-    await tester.tap(find.text('结果'));
-    await tester.pumpAndSettle();
-    expect(find.text('A 组获胜'), findsOneWidget);
+    expect(find.text('随机组队'), findsOneWidget);
+    expect(find.text('手动组队'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('assign-specific-groups')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('complete-session')), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
-  testWidgets('现场球局在窄屏和放大文字下保持可操作', (tester) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(320, 640);
-    tester.platformDispatcher.textScaleFactorTestValue = 1.2;
-    addTearDown(tester.view.resetDevicePixelRatio);
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+  testWidgets('Debug 测试按钮清空旧球局并写入三种状态数据', (tester) async {
+    final store = _MemoryStore(_draft(4));
 
-    final active = PlaySession.create(id: 1, setup: _setup('窄屏球局'))
-      ..addPlayer('甲')
-      ..addPlayer('乙')
-      ..addPlayer('丙')
-      ..addPlayer('丁')
-      ..start();
-    final store = _MemoryStore()..sessions.add(active);
-    await tester.pumpWidget(RallyPairApp(store: store));
+    await tester.pumpWidget(
+      MaterialApp(home: SessionLibraryPage(store: store)),
+    );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('窄屏球局'));
+    await tester.tap(find.byKey(const ValueKey('debug-reset-data')));
     await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
+    expect(find.text('清除并加入测试数据？'), findsOneWidget);
+    expect(find.textContaining('此操作无法撤销'), findsOneWidget);
 
-    await tester.tap(find.text('候场'));
+    await tester.tap(find.text('清除并生成'));
     await tester.pumpAndSettle();
-    expect(find.text('玩家状态'), findsOneWidget);
+
+    final sessions = await store.loadAll();
+    expect(sessions.map((session) => session.id), [91001, 91002, 91003]);
+    expect(sessions.map((session) => session.status), [
+      SessionStatus.active,
+      SessionStatus.draft,
+      SessionStatus.completed,
+    ]);
+    expect(
+      sessions.first.courts.map((court) => court.state),
+      containsAll([CourtState.inPlay, CourtState.awaitingRotation]),
+    );
+    expect(find.text('Debug · 现场轮转'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
 
-SessionSetup _setup(String title) {
-  return SessionSetup(
-    title: title,
-    courtCount: 2,
-    pairingPolicy: PairingPolicy.fairRotation,
-    scorePreset: ScorePreset.standard21,
-    avoidRecentPartner: true,
-    randomSeed: 7,
+PlaySession _draft(int count) {
+  final session = PlaySession.create(
+    id: 1,
+    setup: const SessionSetup(
+      title: '完整流程',
+      courtCount: 1,
+      scorePreset: ScorePreset.standard21,
+      randomSeed: 20260722,
+    ),
   );
+  for (var index = 1; index <= count; index++) {
+    session.addPlayer('玩家$index');
+  }
+  return session;
 }
 
 class _MemoryStore implements PlaySessionStore {
-  _MemoryStore({this.failFirstLoad = false});
+  _MemoryStore(PlaySession session)
+    : _sessions = {session.id: PlaySession.restore(session.snapshot())};
 
-  final bool failFirstLoad;
-  final sessions = <PlaySession>[];
-  var loadCount = 0;
+  final Map<int, PlaySession> _sessions;
 
   @override
   Future<void> save(PlaySession session) async {
-    sessions.removeWhere((value) => value.id == session.id);
-    sessions.add(session);
-  }
-
-  @override
-  Future<List<PlaySession>> loadAll() async {
-    loadCount++;
-    if (failFirstLoad && loadCount == 1) throw StateError('load failed');
-    return List.unmodifiable(sessions);
+    _sessions[session.id] = PlaySession.restore(session.snapshot());
   }
 
   @override
   Future<PlaySession?> load(int id) async {
-    for (final session in sessions) {
-      if (session.id == id) return session;
-    }
-    return null;
+    final session = _sessions[id];
+    return session == null ? null : PlaySession.restore(session.snapshot());
+  }
+
+  @override
+  Future<List<PlaySession>> loadAll() async {
+    return [
+      for (final session in _sessions.values)
+        PlaySession.restore(session.snapshot()),
+    ];
   }
 
   @override
   Future<PlaySession?> latestActive() async {
-    for (final session in sessions.reversed) {
-      if (session.status == SessionStatus.active) return session;
+    for (final session in _sessions.values.toList().reversed) {
+      if (session.status == SessionStatus.active) {
+        return PlaySession.restore(session.snapshot());
+      }
     }
     return null;
   }
@@ -230,14 +209,25 @@ class _MemoryStore implements PlaySessionStore {
     int id,
     void Function(PlaySession session) change,
   ) async {
-    final session = await load(id);
+    final session = _sessions[id];
     if (session == null) throw const RuleViolation('session_not_found');
-    change(session);
-    return session;
+    final copy = PlaySession.restore(session.snapshot());
+    change(copy);
+    _sessions[id] = copy;
+    return PlaySession.restore(copy.snapshot());
   }
 
   @override
-  Future<void> delete(int id) async {
-    sessions.removeWhere((session) => session.id == id);
+  Future<void> delete(int id) async => _sessions.remove(id);
+
+  @override
+  Future<void> replaceAll(Iterable<PlaySession> sessions) async {
+    final replacements = {
+      for (final session in sessions)
+        session.id: PlaySession.restore(session.snapshot()),
+    };
+    _sessions
+      ..clear()
+      ..addAll(replacements);
   }
 }

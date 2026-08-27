@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../play_session/play_session.dart';
 import '../rally_pair_icon.dart';
@@ -99,6 +100,145 @@ class _SessionLibraryPageState extends State<SessionLibraryPage> {
     await _load();
   }
 
+  Future<void> _duplicateSession(PlaySession session) async {
+    final controller = TextEditingController(
+      text: '${session.setup.title} · 再来一场',
+    );
+    final title = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('复制为新球局'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: '新球局名称'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = controller.text.trim();
+              if (value.isNotEmpty) Navigator.of(dialogContext).pop(value);
+            },
+            child: const Text('创建副本'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (!mounted || title == null) return;
+    final nextId =
+        _sessions.fold<int>(
+          0,
+          (largest, value) => value.id > largest ? value.id : largest,
+        ) +
+        1;
+    try {
+      final duplicate = session.duplicate(
+        id: nextId,
+        title: title,
+        randomSeed: DateTime.now().microsecondsSinceEpoch,
+      );
+      await widget.store.save(duplicate);
+      if (!mounted) return;
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) =>
+              SessionRosterPage(store: widget.store, sessionId: nextId),
+        ),
+      );
+      if (mounted) await _load();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('副本未能创建，本地原球局没有变化。')));
+    }
+  }
+
+  Future<void> _deleteSession(PlaySession session) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除球局？'),
+        content: Text('“${session.setup.title}”及其本地比赛记录将被删除。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: RallyPairColors.danger,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('确认删除'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+    try {
+      await widget.store.delete(session.id);
+      if (mounted) await _load();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('删除失败，球局数据仍然保留。')));
+    }
+  }
+
+  Future<void> _resetDebugData() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('清除并加入测试数据？'),
+        content: const Text(
+          '这会永久删除当前设备内的全部球局数据，并写入 3 个 Debug 球局：进行中、待准备和已结束。此操作无法撤销。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: RallyPairColors.danger,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('清除并生成'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || confirmed != true) return;
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    Object? failure;
+    try {
+      await widget.store.replaceAll(_debugSessions());
+    } catch (error) {
+      failure = error;
+    }
+    if (!mounted) return;
+    await _load();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          failure == null ? '测试数据已生成，可以直接进入不同状态的球局。' : '测试数据重置未完整完成，请再次尝试。',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final active = _sessions
@@ -113,7 +253,13 @@ class _SessionLibraryPageState extends State<SessionLibraryPage> {
         child: CustomScrollView(
           key: const PageStorageKey('session-library'),
           slivers: [
-            SliverToBoxAdapter(child: _LibraryHeader(onCreate: _create)),
+            SliverToBoxAdapter(
+              child: _LibraryHeader(
+                busy: _loading,
+                onCreate: _create,
+                onResetDebugData: _resetDebugData,
+              ),
+            ),
             if (_loading)
               const SliverFillRemaining(
                 hasScrollBody: false,
@@ -137,6 +283,8 @@ class _SessionLibraryPageState extends State<SessionLibraryPage> {
                   sessions: active,
                   emphasized: true,
                   onOpen: _openSession,
+                  onDuplicate: _duplicateSession,
+                  onDelete: _deleteSession,
                 ),
               if (other.isNotEmpty)
                 _SessionSection(
@@ -144,6 +292,8 @@ class _SessionLibraryPageState extends State<SessionLibraryPage> {
                   icon: RallyPairIconData.history,
                   sessions: other,
                   onOpen: _openSession,
+                  onDuplicate: _duplicateSession,
+                  onDelete: _deleteSession,
                 ),
               const SliverToBoxAdapter(child: SizedBox(height: 32)),
             ],
@@ -155,9 +305,15 @@ class _SessionLibraryPageState extends State<SessionLibraryPage> {
 }
 
 class _LibraryHeader extends StatelessWidget {
-  const _LibraryHeader({required this.onCreate});
+  const _LibraryHeader({
+    required this.busy,
+    required this.onCreate,
+    required this.onResetDebugData,
+  });
 
+  final bool busy;
   final VoidCallback onCreate;
+  final VoidCallback onResetDebugData;
 
   @override
   Widget build(BuildContext context) {
@@ -172,7 +328,18 @@ class _LibraryHeader extends StatelessWidget {
               children: [
                 const _Brand(),
                 const SizedBox(height: 16),
-                FilledButton(onPressed: onCreate, child: const Text('新建球局')),
+                if (kDebugMode) ...[
+                  OutlinedButton(
+                    key: const ValueKey('debug-reset-data'),
+                    onPressed: busy ? null : onResetDebugData,
+                    child: const Text('重置测试数据'),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                FilledButton(
+                  onPressed: busy ? null : onCreate,
+                  child: const Text('新建球局'),
+                ),
               ],
             );
           }
@@ -180,8 +347,16 @@ class _LibraryHeader extends StatelessWidget {
             children: [
               const Expanded(child: _Brand()),
               const SizedBox(width: 12),
+              if (kDebugMode) ...[
+                OutlinedButton(
+                  key: const ValueKey('debug-reset-data'),
+                  onPressed: busy ? null : onResetDebugData,
+                  child: const Text('测试数据'),
+                ),
+                const SizedBox(width: 10),
+              ],
               FilledButton(
-                onPressed: onCreate,
+                onPressed: busy ? null : onCreate,
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(96, 44),
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -194,6 +369,99 @@ class _LibraryHeader extends StatelessWidget {
       ),
     );
   }
+}
+
+List<PlaySession> _debugSessions() {
+  final active = PlaySession.create(
+    id: 91001,
+    setup: const SessionSetup(
+      title: 'Debug · 现场轮转',
+      courtCount: 0,
+      scorePreset: ScorePreset.standard21,
+      randomSeed: 91001,
+      defaultRotationMode: RotationMode.winnerStays,
+    ),
+  );
+  active.addCourt('东侧 1 号场');
+  active.addCourt('西侧 2 号场');
+  const activeNames = [
+    '林远',
+    '周然',
+    '陈川',
+    '许安',
+    '唐晓',
+    '吴桐',
+    '顾宁',
+    '江禾',
+    '沈悦',
+    '韩松',
+    '苏晴',
+    '陆洋',
+  ];
+  for (final name in activeNames) {
+    active.addPlayer(name);
+  }
+  for (var id = 1; id <= activeNames.length; id += 2) {
+    active.createManualGroup(id, id + 1);
+  }
+  active.start();
+  final playing = active.assignNextGroups(1);
+  active.startMatch(playing.id);
+  final awaitingRotation = active.assignNextGroups(2);
+  active.startMatch(awaitingRotation.id);
+  active.finishMatch(
+    awaitingRotation.id,
+    MatchResult.gameScores(const [
+      GameScore(21, 18),
+      GameScore(19, 21),
+      GameScore(21, 16),
+    ]),
+  );
+
+  final draft = PlaySession.create(
+    id: 91002,
+    setup: const SessionSetup(
+      title: 'Debug · 待准备名单',
+      courtCount: 0,
+      scorePreset: ScorePreset.quick11,
+      randomSeed: 91002,
+      defaultRotationMode: RotationMode.allRotate,
+    ),
+  );
+  draft.addCourt('靠窗场');
+  draft.addCourt('中间场');
+  for (var index = 1; index <= 8; index++) {
+    draft.addPlayer('测试玩家 $index');
+  }
+  draft.createManualGroup(1, 2);
+  draft.createManualGroup(3, 4);
+
+  final completed = PlaySession.create(
+    id: 91003,
+    setup: const SessionSetup(
+      title: 'Debug · 已结束历史',
+      courtCount: 1,
+      scorePreset: ScorePreset.standard21,
+      randomSeed: 91003,
+      defaultRotationMode: RotationMode.allRotate,
+    ),
+  );
+  for (var index = 1; index <= 4; index++) {
+    completed.addPlayer('历史玩家 $index');
+  }
+  completed.createManualGroup(1, 2);
+  completed.createManualGroup(3, 4);
+  completed.start();
+  final historical = completed.assignNextGroups(1);
+  completed.startMatch(historical.id);
+  completed.finishMatch(
+    historical.id,
+    MatchResult.gameScores(const [GameScore(21, 15), GameScore(21, 17)]),
+  );
+  completed.resolveAllRotate(historical.id);
+  completed.complete();
+
+  return [active, draft, completed];
 }
 
 class _Brand extends StatelessWidget {
@@ -244,6 +512,8 @@ class _SessionSection extends StatelessWidget {
     required this.icon,
     required this.sessions,
     required this.onOpen,
+    required this.onDuplicate,
+    required this.onDelete,
     this.emphasized = false,
   });
 
@@ -251,6 +521,8 @@ class _SessionSection extends StatelessWidget {
   final RallyPairIconData icon;
   final List<PlaySession> sessions;
   final ValueChanged<PlaySession> onOpen;
+  final ValueChanged<PlaySession> onDuplicate;
+  final ValueChanged<PlaySession> onDelete;
   final bool emphasized;
 
   @override
@@ -270,6 +542,12 @@ class _SessionSection extends StatelessWidget {
                       sessions[index].status == SessionStatus.active
                   ? () => onOpen(sessions[index])
                   : null,
+              onDuplicate:
+                  sessions[index].status == SessionStatus.active ||
+                      sessions[index].status == SessionStatus.completed
+                  ? () => onDuplicate(sessions[index])
+                  : null,
+              onDelete: () => onDelete(sessions[index]),
             ),
             if (index != sessions.length - 1) const SizedBox(height: 12),
           ],
@@ -302,11 +580,15 @@ class _SessionCard extends StatelessWidget {
     required this.session,
     required this.emphasized,
     required this.onTap,
+    required this.onDuplicate,
+    required this.onDelete,
   });
 
   final PlaySession session;
   final bool emphasized;
   final VoidCallback? onTap;
+  final VoidCallback? onDuplicate;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -341,6 +623,21 @@ class _SessionCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 12),
                   _StatusBadge(status: session.status),
+                  PopupMenuButton<String>(
+                    tooltip: '球局操作',
+                    onSelected: (value) {
+                      if (value == 'duplicate') onDuplicate?.call();
+                      if (value == 'delete') onDelete();
+                    },
+                    itemBuilder: (_) => [
+                      if (onDuplicate != null)
+                        const PopupMenuItem(
+                          value: 'duplicate',
+                          child: Text('再次组织'),
+                        ),
+                      const PopupMenuItem(value: 'delete', child: Text('删除球局')),
+                    ],
+                  ),
                 ],
               ),
               const SizedBox(height: 16),

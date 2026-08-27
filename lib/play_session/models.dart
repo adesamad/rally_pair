@@ -4,13 +4,43 @@ enum PairingPolicy { random, fairRotation }
 
 enum ScorePreset { quick11, standard21 }
 
+enum RotationMode { winnerStays, allRotate }
+
 enum SessionStatus { draft, active, completed, deleted }
 
-enum PlayerState { waiting, resting, left, assigned, playing, archived }
+enum PlayerState {
+  ungrouped,
+  grouped,
+  resting,
+  left,
+  assigned,
+  playing,
+  awaitingRotation,
+  staying,
+  archived,
+  waiting,
+}
 
-enum MatchState { ready, inProgress, completed, canceled }
+enum MatchState { ready, inProgress, resultRecorded, completed, canceled }
 
-enum CourtState { available, reserved, inPlay }
+enum CourtState {
+  available,
+  ready,
+  inPlay,
+  awaitingRotation,
+  waitingOpponent,
+  reserved,
+}
+
+enum GroupState {
+  waiting,
+  assigned,
+  playing,
+  awaitingRotation,
+  staying,
+  dissolved,
+  archived,
+}
 
 enum Side { a, b }
 
@@ -29,10 +59,11 @@ final class SessionSetup {
   const SessionSetup({
     required this.title,
     required this.courtCount,
-    required this.pairingPolicy,
+    this.pairingPolicy = PairingPolicy.fairRotation,
     required this.scorePreset,
-    required this.avoidRecentPartner,
+    this.avoidRecentPartner = true,
     required this.randomSeed,
+    this.defaultRotationMode = RotationMode.winnerStays,
   });
 
   final String title;
@@ -41,6 +72,7 @@ final class SessionSetup {
   final ScorePreset scorePreset;
   final bool avoidRecentPartner;
   final int randomSeed;
+  final RotationMode defaultRotationMode;
 
   SessionSetup copyWith({
     String? title,
@@ -49,6 +81,7 @@ final class SessionSetup {
     ScorePreset? scorePreset,
     bool? avoidRecentPartner,
     int? randomSeed,
+    RotationMode? defaultRotationMode,
   }) {
     return SessionSetup(
       title: title ?? this.title,
@@ -57,6 +90,7 @@ final class SessionSetup {
       scorePreset: scorePreset ?? this.scorePreset,
       avoidRecentPartner: avoidRecentPartner ?? this.avoidRecentPartner,
       randomSeed: randomSeed ?? this.randomSeed,
+      defaultRotationMode: defaultRotationMode ?? this.defaultRotationMode,
     );
   }
 }
@@ -85,17 +119,72 @@ final class SessionPlayer {
 }
 
 final class Court {
-  const Court({required this.number, required this.state, this.matchId});
+  const Court({
+    required this.number,
+    this.name = '',
+    required this.state,
+    this.matchId,
+    this.stayingGroupId,
+  });
 
   final int number;
+  final String name;
   final CourtState state;
   final int? matchId;
+  final int? stayingGroupId;
 
-  Court copyWith({CourtState? state, int? matchId, bool clearMatch = false}) {
+  Court copyWith({
+    String? name,
+    CourtState? state,
+    int? matchId,
+    int? stayingGroupId,
+    bool clearMatch = false,
+    bool clearStayingGroup = false,
+  }) {
     return Court(
       number: number,
+      name: name ?? this.name,
       state: state ?? this.state,
       matchId: clearMatch ? null : matchId ?? this.matchId,
+      stayingGroupId: clearStayingGroup
+          ? null
+          : stayingGroupId ?? this.stayingGroupId,
+    );
+  }
+}
+
+final class PairingGroup {
+  const PairingGroup({
+    required this.id,
+    required this.firstPlayerId,
+    required this.secondPlayerId,
+    required this.state,
+    required this.queueOrder,
+  });
+
+  final int id;
+  final int firstPlayerId;
+  final int secondPlayerId;
+  final GroupState state;
+  final int queueOrder;
+
+  List<int> get players => List.unmodifiable([firstPlayerId, secondPlayerId]);
+
+  bool contains(int playerId) =>
+      firstPlayerId == playerId || secondPlayerId == playerId;
+
+  PairingGroup copyWith({
+    int? firstPlayerId,
+    int? secondPlayerId,
+    GroupState? state,
+    int? queueOrder,
+  }) {
+    return PairingGroup(
+      id: id,
+      firstPlayerId: firstPlayerId ?? this.firstPlayerId,
+      secondPlayerId: secondPlayerId ?? this.secondPlayerId,
+      state: state ?? this.state,
+      queueOrder: queueOrder ?? this.queueOrder,
     );
   }
 }
@@ -166,6 +255,9 @@ final class SessionMatch {
     required this.teamB,
     required this.state,
     required this.relaxed,
+    this.groupAId,
+    this.groupBId,
+    this.rotationMode,
     this.result,
     this.completedOrder,
   });
@@ -176,6 +268,9 @@ final class SessionMatch {
   final Team teamB;
   final MatchState state;
   final bool relaxed;
+  final int? groupAId;
+  final int? groupBId;
+  final RotationMode? rotationMode;
   final MatchResult? result;
   final int? completedOrder;
 
@@ -191,6 +286,9 @@ final class SessionMatch {
     MatchState? state,
     MatchResult? result,
     int? completedOrder,
+    RotationMode? rotationMode,
+    int? groupAId,
+    int? groupBId,
   }) {
     return SessionMatch(
       id: id,
@@ -199,6 +297,9 @@ final class SessionMatch {
       teamB: teamB ?? this.teamB,
       state: state ?? this.state,
       relaxed: relaxed,
+      groupAId: groupAId ?? this.groupAId,
+      groupBId: groupBId ?? this.groupBId,
+      rotationMode: rotationMode ?? this.rotationMode,
       result: result ?? this.result,
       completedOrder: completedOrder ?? this.completedOrder,
     );

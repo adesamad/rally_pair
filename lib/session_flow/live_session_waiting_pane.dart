@@ -9,6 +9,8 @@ class _WaitingPane extends StatelessWidget {
     required this.onRest,
     required this.onReturn,
     required this.onLeave,
+    required this.onRename,
+    required this.onRemove,
   });
 
   final PlaySession session;
@@ -18,11 +20,19 @@ class _WaitingPane extends StatelessWidget {
   final ValueChanged<int> onRest;
   final ValueChanged<int> onReturn;
   final ValueChanged<int> onLeave;
+  final ValueChanged<SessionPlayer> onRename;
+  final ValueChanged<SessionPlayer> onRemove;
 
   @override
   Widget build(BuildContext context) {
     final groups = <(String, PlayerState, List<SessionPlayer>)>[
-      ('候场', PlayerState.waiting, session.waitingPlayers),
+      (
+        '未成组',
+        PlayerState.ungrouped,
+        session.players
+            .where((player) => player.state == PlayerState.ungrouped)
+            .toList(),
+      ),
       (
         '休息',
         PlayerState.resting,
@@ -38,10 +48,10 @@ class _WaitingPane extends StatelessWidget {
             .toList(),
       ),
       (
-        '已分组',
-        PlayerState.assigned,
+        '已成组',
+        PlayerState.grouped,
         session.players
-            .where((player) => player.state == PlayerState.assigned)
+            .where((player) => player.state == PlayerState.grouped)
             .toList(),
       ),
       (
@@ -55,7 +65,10 @@ class _WaitingPane extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
       children: [
-        const _SectionIntro(title: '玩家状态', description: '现场加入的新玩家会直接排到候场队列末尾。'),
+        const _SectionIntro(
+          title: '玩家状态',
+          description: '现场加入的新玩家先进入未成组区，可继续随机或手动组队。',
+        ),
         const SizedBox(height: 18),
         Row(
           children: [
@@ -89,6 +102,8 @@ class _WaitingPane extends StatelessWidget {
                 onRest: onRest,
                 onReturn: onReturn,
                 onLeave: onLeave,
+                onRename: onRename,
+                onRemove: onRemove,
               ),
               if (index != group.$3.length - 1) const SizedBox(height: 8),
             ],
@@ -105,6 +120,8 @@ class _LivePlayerCard extends StatelessWidget {
     required this.onRest,
     required this.onReturn,
     required this.onLeave,
+    required this.onRename,
+    required this.onRemove,
   });
 
   final SessionPlayer player;
@@ -112,11 +129,13 @@ class _LivePlayerCard extends StatelessWidget {
   final ValueChanged<int> onRest;
   final ValueChanged<int> onReturn;
   final ValueChanged<int> onLeave;
+  final ValueChanged<SessionPlayer> onRename;
+  final ValueChanged<SessionPlayer> onRemove;
 
   @override
   Widget build(BuildContext context) {
     final editable =
-        player.state == PlayerState.waiting ||
+        player.state == PlayerState.ungrouped ||
         player.state == PlayerState.resting ||
         player.state == PlayerState.left;
     return Container(
@@ -145,7 +164,11 @@ class _LivePlayerCard extends StatelessWidget {
                 alignment: WrapAlignment.end,
                 spacing: 2,
                 children: [
-                  if (player.state == PlayerState.waiting)
+                  TextButton(
+                    onPressed: busy ? null : () => onRename(player),
+                    child: const Text('改名'),
+                  ),
+                  if (player.state == PlayerState.ungrouped)
                     TextButton(
                       onPressed: busy ? null : () => onRest(player.id),
                       child: const Text('休息'),
@@ -156,7 +179,7 @@ class _LivePlayerCard extends StatelessWidget {
                       onPressed: busy ? null : () => onReturn(player.id),
                       child: const Text('回到候场'),
                     ),
-                  if (player.state == PlayerState.waiting ||
+                  if (player.state == PlayerState.ungrouped ||
                       player.state == PlayerState.resting)
                     TextButton(
                       onPressed: busy ? null : () => onLeave(player.id),
@@ -164,6 +187,13 @@ class _LivePlayerCard extends StatelessWidget {
                         foregroundColor: RallyPairColors.danger,
                       ),
                       child: const Text('离场'),
+                    ),
+                  if (player.state == PlayerState.ungrouped ||
+                      player.state == PlayerState.resting ||
+                      player.state == PlayerState.left)
+                    TextButton(
+                      onPressed: busy ? null : () => onRemove(player),
+                      child: const Text('移除'),
                     ),
                 ],
               ),
