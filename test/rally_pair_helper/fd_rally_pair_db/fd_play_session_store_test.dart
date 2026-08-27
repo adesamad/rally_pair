@@ -198,7 +198,28 @@ void main() {
       final version = await database
           .customSelect('PRAGMA user_version')
           .getSingle();
-      expect(version.read<int>('user_version'), 2);
+      expect(version.read<int>('user_version'), 3);
+    });
+
+    test('repairs a v2 database shell missing the session tables', () async {
+      await database.close();
+      database = FdRallyPairDatabase(
+        NativeDatabase.memory(
+          setup: (rawDatabase) {
+            rawDatabase.execute('PRAGMA user_version = 2');
+          },
+        ),
+      );
+      store = FdPlaySessionStore(database);
+      final session = _draftSession(id: 10, playerCount: 4);
+
+      await store.save(session);
+
+      expect((await store.load(10))?.players.length, 4);
+      final version = await database
+          .customSelect('PRAGMA user_version')
+          .getSingle();
+      expect(version.read<int>('user_version'), 3);
     });
   });
 }

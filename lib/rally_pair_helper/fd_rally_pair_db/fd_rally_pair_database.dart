@@ -20,22 +20,45 @@ class FdRallyPairDatabase extends _$FdRallyPairDatabase {
     : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
       onCreate: (migrator) => migrator.createAll(),
       onUpgrade: (migrator, from, to) async {
-        if (from < 2) {
-          await migrator.createTable(playSessionRecords);
-          await migrator.createTable(sessionPlayerRecords);
-          await migrator.createTable(sessionCourtRecords);
-          await migrator.createTable(sessionMatchRecords);
-          await migrator.createTable(matchGameRecords);
+        if (from < 3) {
+          await _createMissingSessionTables(migrator);
         }
       },
     );
+  }
+
+  Future<void> _createMissingSessionTables(Migrator migrator) async {
+    if (!await _hasTable('play_session_records')) {
+      await migrator.createTable(playSessionRecords);
+    }
+    if (!await _hasTable('session_player_records')) {
+      await migrator.createTable(sessionPlayerRecords);
+    }
+    if (!await _hasTable('session_court_records')) {
+      await migrator.createTable(sessionCourtRecords);
+    }
+    if (!await _hasTable('session_match_records')) {
+      await migrator.createTable(sessionMatchRecords);
+    }
+    if (!await _hasTable('match_game_records')) {
+      await migrator.createTable(matchGameRecords);
+    }
+  }
+
+  Future<bool> _hasTable(String name) async {
+    final rows = await customSelect(
+      'SELECT 1 FROM sqlite_master '
+      "WHERE type = 'table' AND name = ? LIMIT 1",
+      variables: [Variable<String>(name)],
+    ).get();
+    return rows.isNotEmpty;
   }
 
   static QueryExecutor _openConnection() {
