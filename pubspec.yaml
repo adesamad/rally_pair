@@ -67,9 +67,6 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  assets:
-    - assets/icons/
-
 dependency_overrides:
   sqlparser: 0.44.0
 
