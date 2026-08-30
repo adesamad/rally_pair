@@ -42,22 +42,11 @@ void main() {
       );
     });
 
-    test('standard 21 accepts straight games and a deciding game', () {
+    test('standard 21 accepts exactly one game', () {
       expect(
         () => ScoreRules.validate(
           ScorePreset.standard21,
-          MatchResult.gameScores(const [GameScore(21, 15), GameScore(21, 18)]),
-        ),
-        returnsNormally,
-      );
-      expect(
-        () => ScoreRules.validate(
-          ScorePreset.standard21,
-          MatchResult.gameScores(const [
-            GameScore(21, 18),
-            GameScore(17, 21),
-            GameScore(22, 20),
-          ]),
+          MatchResult.gameScores(const [GameScore(21, 15)]),
         ),
         returnsNormally,
       );
@@ -67,7 +56,14 @@ void main() {
       expect(
         () => ScoreRules.validate(
           ScorePreset.standard21,
-          MatchResult.gameScores(const [GameScore(22, 20), GameScore(30, 29)]),
+          MatchResult.gameScores(const [GameScore(22, 20)]),
+        ),
+        returnsNormally,
+      );
+      expect(
+        () => ScoreRules.validate(
+          ScorePreset.standard21,
+          MatchResult.gameScores(const [GameScore(30, 29)]),
         ),
         returnsNormally,
       );
@@ -77,37 +73,37 @@ void main() {
       expect(
         () => ScoreRules.validate(
           ScorePreset.standard21,
-          MatchResult.gameScores(const [GameScore(21, 20), GameScore(21, 18)]),
+          MatchResult.gameScores(const [GameScore(21, 20)]),
         ),
         _throwsViolation('invalid_standard_21_score'),
       );
       expect(
         () => ScoreRules.validate(
           ScorePreset.standard21,
-          MatchResult.gameScores(const [GameScore(31, 29), GameScore(21, 18)]),
+          MatchResult.gameScores(const [GameScore(31, 29)]),
         ),
         _throwsViolation('invalid_standard_21_score'),
       );
     });
 
-    test('standard 21 enforces best-of-three match structure', () {
-      expect(
-        () => MatchResult.gameScores(const [
-          GameScore(21, 18),
-          GameScore(18, 21),
-        ]),
-        _throwsViolation('winner_required'),
-      );
+    test('standard 21 rejects multiple games for new sessions', () {
       expect(
         () => ScoreRules.validate(
           ScorePreset.standard21,
-          MatchResult.gameScores(const [
-            GameScore(21, 18),
-            GameScore(21, 17),
-            GameScore(18, 21),
-          ]),
+          MatchResult.gameScores(const [GameScore(21, 18), GameScore(21, 17)]),
         ),
-        _throwsViolation('standard_21_has_extra_game'),
+        _throwsViolation('standard_21_requires_one_game'),
+      );
+    });
+
+    test('legacy standard 21 series remains readable', () {
+      expect(
+        () => ScoreRules.validate(
+          ScorePreset.standard21,
+          MatchResult.gameScores(const [GameScore(21, 18), GameScore(21, 17)]),
+          allowLegacySeries: true,
+        ),
+        returnsNormally,
       );
     });
   });

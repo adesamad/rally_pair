@@ -7,6 +7,7 @@ import '../rally_pair_theme.dart';
 import '../session_flow/live_session_page.dart';
 import '../session_flow/session_roster_page.dart';
 import 'session_setup_page.dart';
+import 'session_summary_page.dart';
 
 class SessionLibraryPage extends StatefulWidget {
   const SessionLibraryPage({super.key, required this.store});
@@ -90,7 +91,11 @@ class _SessionLibraryPageState extends State<SessionLibraryPage> {
         store: widget.store,
         sessionId: session.id,
       ),
-      SessionStatus.completed || SessionStatus.deleted => null,
+      SessionStatus.completed => SessionSummaryPage(
+        store: widget.store,
+        sessionId: session.id,
+      ),
+      SessionStatus.deleted => null,
     };
     if (page == null) return;
     await Navigator.of(
@@ -198,7 +203,7 @@ class _SessionLibraryPageState extends State<SessionLibraryPage> {
       builder: (dialogContext) => AlertDialog(
         title: const Text('清除并加入测试数据？'),
         content: const Text(
-          '这会永久删除当前设备内的全部球局数据，并写入 3 个 Debug 球局：进行中、待准备和已结束。此操作无法撤销。',
+          '这会永久删除当前设备内的全部球局数据，并写入 8 个单场地示例球局，覆盖单双打、准备、开赛、比分、轮转、补位和总结。此操作无法撤销。',
         ),
         actions: [
           TextButton(
@@ -233,7 +238,7 @@ class _SessionLibraryPageState extends State<SessionLibraryPage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          failure == null ? '测试数据已生成，可以直接进入不同状态的球局。' : '测试数据重置未完整完成，请再次尝试。',
+          failure == null ? '8 个示例球局已生成，可以逐个检查不同阶段。' : '测试数据重置未完整完成，请再次尝试。',
         ),
       ),
     );
@@ -372,96 +377,254 @@ class _LibraryHeader extends StatelessWidget {
 }
 
 List<PlaySession> _debugSessions() {
-  final active = PlaySession.create(
+  final draftSingles = PlaySession.create(
     id: 91001,
     setup: const SessionSetup(
-      title: 'Debug · 现场轮转',
-      courtCount: 0,
-      scorePreset: ScorePreset.standard21,
+      title: '周二晨练 · 单打',
+      courtCount: 1,
+      matchFormat: MatchFormat.singles,
+      scorePreset: ScorePreset.quick11,
       randomSeed: 91001,
+      defaultRotationMode: RotationMode.allRotate,
+    ),
+  );
+  _addPlayers(draftSingles, const ['王亦晨']);
+
+  final draftDoubles = PlaySession.create(
+    id: 91002,
+    setup: const SessionSetup(
+      title: '周五下班局 · 双打',
+      courtCount: 1,
+      scorePreset: ScorePreset.standard21,
+      randomSeed: 91002,
       defaultRotationMode: RotationMode.winnerStays,
     ),
   );
-  active.addCourt('东侧 1 号场');
-  active.addCourt('西侧 2 号场');
-  const activeNames = [
-    '林远',
-    '周然',
-    '陈川',
-    '许安',
-    '唐晓',
-    '吴桐',
-    '顾宁',
-    '江禾',
-    '沈悦',
-    '韩松',
-    '苏晴',
-    '陆洋',
-  ];
-  for (final name in activeNames) {
-    active.addPlayer(name);
-  }
-  for (var id = 1; id <= activeNames.length; id += 2) {
-    active.createManualGroup(id, id + 1);
-  }
-  active.start();
-  final playing = active.assignNextGroups(1);
-  active.startMatch(playing.id);
-  final awaitingRotation = active.assignNextGroups(2);
-  active.startMatch(awaitingRotation.id);
-  active.finishMatch(
-    awaitingRotation.id,
-    MatchResult.gameScores(const [
-      GameScore(21, 18),
-      GameScore(19, 21),
-      GameScore(21, 16),
-    ]),
-  );
+  _addPlayers(draftDoubles, const [
+    '陈宇航',
+    '赵可欣',
+    '林泽远',
+    '沈雨彤',
+    '周嘉乐',
+    '何思妍',
+    '徐子墨',
+  ]);
+  draftDoubles.createManualGroup(1, 2);
+  draftDoubles.createManualGroup(3, 4);
+  draftDoubles.createManualGroup(5, 6);
 
-  final draft = PlaySession.create(
-    id: 91002,
-    setup: const SessionSetup(
-      title: 'Debug · 待准备名单',
-      courtCount: 0,
-      scorePreset: ScorePreset.quick11,
-      randomSeed: 91002,
-      defaultRotationMode: RotationMode.allRotate,
-    ),
-  );
-  draft.addCourt('靠窗场');
-  draft.addCourt('中间场');
-  for (var index = 1; index <= 8; index++) {
-    draft.addPlayer('测试玩家 $index');
-  }
-  draft.createManualGroup(1, 2);
-  draft.createManualGroup(3, 4);
-
-  final completed = PlaySession.create(
+  final readyDoubles = PlaySession.create(
     id: 91003,
     setup: const SessionSetup(
-      title: 'Debug · 已结束历史',
+      title: '周六上午 · 双打热身',
       courtCount: 1,
       scorePreset: ScorePreset.standard21,
       randomSeed: 91003,
+      defaultRotationMode: RotationMode.winnerStays,
+    ),
+  );
+  _addPlayers(readyDoubles, const [
+    '刘昊然',
+    '唐婉清',
+    '蒋承泽',
+    '顾思宁',
+    '罗景行',
+    '许欣怡',
+    '邵文杰',
+    '马菲',
+  ]);
+  for (var id = 1; id <= 8; id += 2) {
+    readyDoubles.createManualGroup(id, id + 1);
+  }
+  readyDoubles.start();
+  readyDoubles.assignNext(1);
+
+  final playingSingles = PlaySession.create(
+    id: 91004,
+    setup: const SessionSetup(
+      title: '午休单打 · 进行中',
+      courtCount: 1,
+      matchFormat: MatchFormat.singles,
+      scorePreset: ScorePreset.standard21,
+      randomSeed: 91004,
       defaultRotationMode: RotationMode.allRotate,
     ),
   );
-  for (var index = 1; index <= 4; index++) {
-    completed.addPlayer('历史玩家 $index');
-  }
-  completed.createManualGroup(1, 2);
-  completed.createManualGroup(3, 4);
-  completed.start();
-  final historical = completed.assignNextGroups(1);
-  completed.startMatch(historical.id);
-  completed.finishMatch(
-    historical.id,
-    MatchResult.gameScores(const [GameScore(21, 15), GameScore(21, 17)]),
-  );
-  completed.resolveAllRotate(historical.id);
-  completed.complete();
+  _addPlayers(playingSingles, const ['许文博', '周子晴', '陈嘉树', '沈知夏', '林嘉宁', '高远']);
+  playingSingles.start();
+  final playingMatch = playingSingles.assignNext(1);
+  playingSingles.startMatch(playingMatch.id);
 
-  return [active, draft, completed];
+  final rotatingDoubles = PlaySession.create(
+    id: 91005,
+    setup: const SessionSetup(
+      title: '社区夜场 · 待轮转',
+      courtCount: 1,
+      scorePreset: ScorePreset.quick11,
+      randomSeed: 91005,
+      defaultRotationMode: RotationMode.allRotate,
+    ),
+  );
+  _addPlayers(rotatingDoubles, const [
+    '郑晓峰',
+    '孙雅雯',
+    '吴迪',
+    '何雨桐',
+    '赵明辉',
+    '徐安然',
+    '彭凯',
+    '宋雨欣',
+    '杨帆',
+    '郭静怡',
+  ]);
+  for (var id = 1; id <= 10; id += 2) {
+    rotatingDoubles.createManualGroup(id, id + 1);
+  }
+  rotatingDoubles.start();
+  final rotatingMatch = rotatingDoubles.assignNext(1);
+  rotatingDoubles.startMatch(rotatingMatch.id);
+  rotatingDoubles.finishMatch(
+    rotatingMatch.id,
+    MatchResult.gameScores(const [GameScore(11, 8)]),
+  );
+
+  final waitingSingles = PlaySession.create(
+    id: 91006,
+    setup: const SessionSetup(
+      title: '两人加练 · 胜方留场',
+      courtCount: 1,
+      matchFormat: MatchFormat.singles,
+      scorePreset: ScorePreset.standard21,
+      randomSeed: 91006,
+      defaultRotationMode: RotationMode.winnerStays,
+    ),
+  );
+  _addPlayers(waitingSingles, const ['林一川', '丁可欣']);
+  waitingSingles.start();
+  final waitingMatch = waitingSingles.assignNext(1);
+  waitingSingles.startMatch(waitingMatch.id);
+  waitingSingles.finishMatch(
+    waitingMatch.id,
+    MatchResult.gameScores(const [GameScore(22, 20)]),
+  );
+  waitingSingles.resolveWinnerStays(waitingMatch.id);
+
+  final completedSingles = PlaySession.create(
+    id: 91007,
+    setup: const SessionSetup(
+      title: '单打轮转 · 已结束',
+      courtCount: 1,
+      matchFormat: MatchFormat.singles,
+      scorePreset: ScorePreset.quick11,
+      randomSeed: 91007,
+      defaultRotationMode: RotationMode.allRotate,
+    ),
+  );
+  _addPlayers(completedSingles, const [
+    '叶青禾',
+    '陆星野',
+    '苏念安',
+    '江临川',
+    '温书宁',
+    '程以默',
+  ]);
+  completedSingles.start();
+  var singlesMatch = completedSingles.assignNext(1);
+  completedSingles.startMatch(singlesMatch.id);
+  completedSingles.finishMatch(
+    singlesMatch.id,
+    MatchResult.gameScores(const [GameScore(11, 7)]),
+  );
+  completedSingles.resolveAllRotate(singlesMatch.id);
+  singlesMatch = completedSingles.matches.last;
+  completedSingles.startMatch(singlesMatch.id);
+  completedSingles.finishMatch(
+    singlesMatch.id,
+    MatchResult.gameScores(const [GameScore(11, 9)]),
+  );
+  completedSingles.resolveWinnerStays(singlesMatch.id);
+  singlesMatch = completedSingles.matches.last;
+  completedSingles.startMatch(singlesMatch.id);
+  completedSingles.finishMatch(singlesMatch.id, MatchResult.winnerOnly(Side.b));
+  completedSingles.resolveAllRotate(singlesMatch.id);
+  singlesMatch = completedSingles.matches.last;
+  completedSingles.startMatch(singlesMatch.id);
+  completedSingles.finishMatch(
+    singlesMatch.id,
+    MatchResult.gameScores(const [GameScore(11, 6)]),
+  );
+  completedSingles.resolveAllRotate(singlesMatch.id);
+  completedSingles.cancelMatch(completedSingles.matches.last.id);
+  completedSingles.complete();
+
+  final completedDoubles = PlaySession.create(
+    id: 91008,
+    setup: const SessionSetup(
+      title: '周日双打 · 已结束',
+      courtCount: 1,
+      scorePreset: ScorePreset.standard21,
+      randomSeed: 91008,
+      defaultRotationMode: RotationMode.winnerStays,
+    ),
+  );
+  _addPlayers(completedDoubles, const [
+    '秦朗',
+    '顾漫宁',
+    '谢云舟',
+    '乔安然',
+    '傅景明',
+    '夏语桐',
+    '韩知远',
+    '白清欢',
+  ]);
+  for (var id = 1; id <= 8; id += 2) {
+    completedDoubles.createManualGroup(id, id + 1);
+  }
+  completedDoubles.start();
+  var doublesMatch = completedDoubles.assignNext(1);
+  completedDoubles.startMatch(doublesMatch.id);
+  completedDoubles.finishMatch(
+    doublesMatch.id,
+    MatchResult.gameScores(const [GameScore(21, 17)]),
+  );
+  completedDoubles.resolveAllRotate(doublesMatch.id);
+  doublesMatch = completedDoubles.matches.last;
+  completedDoubles.startMatch(doublesMatch.id);
+  completedDoubles.finishMatch(
+    doublesMatch.id,
+    MatchResult.gameScores(const [GameScore(22, 20)]),
+  );
+  completedDoubles.resolveWinnerStays(doublesMatch.id);
+  doublesMatch = completedDoubles.matches.last;
+  completedDoubles.startMatch(doublesMatch.id);
+  completedDoubles.finishMatch(
+    doublesMatch.id,
+    MatchResult.gameScores(const [GameScore(30, 29)]),
+  );
+  completedDoubles.resolveAllRotate(doublesMatch.id);
+  doublesMatch = completedDoubles.matches.last;
+  completedDoubles.startMatch(doublesMatch.id);
+  completedDoubles.finishMatch(doublesMatch.id, MatchResult.winnerOnly(Side.a));
+  completedDoubles.resolveAllRotate(doublesMatch.id);
+  completedDoubles.cancelMatch(completedDoubles.matches.last.id);
+  completedDoubles.complete();
+
+  return [
+    draftSingles,
+    draftDoubles,
+    readyDoubles,
+    playingSingles,
+    rotatingDoubles,
+    waitingSingles,
+    completedSingles,
+    completedDoubles,
+  ];
+}
+
+void _addPlayers(PlaySession session, List<String> names) {
+  for (final name in names) {
+    session.addPlayer(name);
+  }
 }
 
 class _Brand extends StatelessWidget {
@@ -539,7 +702,8 @@ class _SessionSection extends StatelessWidget {
               emphasized: emphasized,
               onTap:
                   sessions[index].status == SessionStatus.draft ||
-                      sessions[index].status == SessionStatus.active
+                      sessions[index].status == SessionStatus.active ||
+                      sessions[index].status == SessionStatus.completed
                   ? () => onOpen(sessions[index])
                   : null,
               onDuplicate:
@@ -646,7 +810,11 @@ class _SessionCard extends StatelessWidget {
                 runSpacing: 8,
                 children: [
                   _MetadataChip(label: '${session.players.length} 人'),
-                  _MetadataChip(label: '${session.setup.courtCount} 块场地'),
+                  _MetadataChip(
+                    label: session.setup.matchFormat == MatchFormat.singles
+                        ? '单打 · 1 局'
+                        : '双打 · 1 局',
+                  ),
                   _MetadataChip(label: '$completedMatches 场已完成'),
                 ],
               ),

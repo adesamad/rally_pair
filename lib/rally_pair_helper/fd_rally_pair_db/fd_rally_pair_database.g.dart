@@ -60,6 +60,31 @@ class $PlaySessionRecordsTable extends PlaySessionRecords
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _matchFormatMeta = const VerificationMeta(
+    'matchFormat',
+  );
+  @override
+  late final GeneratedColumn<String> matchFormat = GeneratedColumn<String>(
+    'match_format',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _singleGameMeta = const VerificationMeta(
+    'singleGame',
+  );
+  @override
+  late final GeneratedColumn<bool> singleGame = GeneratedColumn<bool>(
+    'single_game',
+    aliasedName,
+    true,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("single_game" IN (0, 1))',
+    ),
+  );
   static const VerificationMeta _avoidRecentPartnerMeta =
       const VerificationMeta('avoidRecentPartner');
   @override
@@ -190,6 +215,8 @@ class $PlaySessionRecordsTable extends PlaySessionRecords
     courtCount,
     pairingPolicy,
     scorePreset,
+    matchFormat,
+    singleGame,
     avoidRecentPartner,
     randomSeed,
     status,
@@ -254,6 +281,21 @@ class $PlaySessionRecordsTable extends PlaySessionRecords
       );
     } else if (isInserting) {
       context.missing(_scorePresetMeta);
+    }
+    if (data.containsKey('match_format')) {
+      context.handle(
+        _matchFormatMeta,
+        matchFormat.isAcceptableOrUnknown(
+          data['match_format']!,
+          _matchFormatMeta,
+        ),
+      );
+    }
+    if (data.containsKey('single_game')) {
+      context.handle(
+        _singleGameMeta,
+        singleGame.isAcceptableOrUnknown(data['single_game']!, _singleGameMeta),
+      );
     }
     if (data.containsKey('avoid_recent_partner')) {
       context.handle(
@@ -392,6 +434,14 @@ class $PlaySessionRecordsTable extends PlaySessionRecords
         DriftSqlType.string,
         data['${effectivePrefix}score_preset'],
       )!,
+      matchFormat: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}match_format'],
+      ),
+      singleGame: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}single_game'],
+      ),
       avoidRecentPartner: attachedDatabase.typeMapping.read(
         DriftSqlType.bool,
         data['${effectivePrefix}avoid_recent_partner'],
@@ -452,6 +502,8 @@ class PlaySessionRecord extends DataClass
   final int courtCount;
   final String pairingPolicy;
   final String scorePreset;
+  final String? matchFormat;
+  final bool? singleGame;
   final bool avoidRecentPartner;
   final int randomSeed;
   final String status;
@@ -469,6 +521,8 @@ class PlaySessionRecord extends DataClass
     required this.courtCount,
     required this.pairingPolicy,
     required this.scorePreset,
+    this.matchFormat,
+    this.singleGame,
     required this.avoidRecentPartner,
     required this.randomSeed,
     required this.status,
@@ -489,6 +543,12 @@ class PlaySessionRecord extends DataClass
     map['court_count'] = Variable<int>(courtCount);
     map['pairing_policy'] = Variable<String>(pairingPolicy);
     map['score_preset'] = Variable<String>(scorePreset);
+    if (!nullToAbsent || matchFormat != null) {
+      map['match_format'] = Variable<String>(matchFormat);
+    }
+    if (!nullToAbsent || singleGame != null) {
+      map['single_game'] = Variable<bool>(singleGame);
+    }
     map['avoid_recent_partner'] = Variable<bool>(avoidRecentPartner);
     map['random_seed'] = Variable<int>(randomSeed);
     map['status'] = Variable<String>(status);
@@ -510,6 +570,12 @@ class PlaySessionRecord extends DataClass
       courtCount: Value(courtCount),
       pairingPolicy: Value(pairingPolicy),
       scorePreset: Value(scorePreset),
+      matchFormat: matchFormat == null && nullToAbsent
+          ? const Value.absent()
+          : Value(matchFormat),
+      singleGame: singleGame == null && nullToAbsent
+          ? const Value.absent()
+          : Value(singleGame),
       avoidRecentPartner: Value(avoidRecentPartner),
       randomSeed: Value(randomSeed),
       status: Value(status),
@@ -535,6 +601,8 @@ class PlaySessionRecord extends DataClass
       courtCount: serializer.fromJson<int>(json['courtCount']),
       pairingPolicy: serializer.fromJson<String>(json['pairingPolicy']),
       scorePreset: serializer.fromJson<String>(json['scorePreset']),
+      matchFormat: serializer.fromJson<String?>(json['matchFormat']),
+      singleGame: serializer.fromJson<bool?>(json['singleGame']),
       avoidRecentPartner: serializer.fromJson<bool>(json['avoidRecentPartner']),
       randomSeed: serializer.fromJson<int>(json['randomSeed']),
       status: serializer.fromJson<String>(json['status']),
@@ -559,6 +627,8 @@ class PlaySessionRecord extends DataClass
       'courtCount': serializer.toJson<int>(courtCount),
       'pairingPolicy': serializer.toJson<String>(pairingPolicy),
       'scorePreset': serializer.toJson<String>(scorePreset),
+      'matchFormat': serializer.toJson<String?>(matchFormat),
+      'singleGame': serializer.toJson<bool?>(singleGame),
       'avoidRecentPartner': serializer.toJson<bool>(avoidRecentPartner),
       'randomSeed': serializer.toJson<int>(randomSeed),
       'status': serializer.toJson<String>(status),
@@ -579,6 +649,8 @@ class PlaySessionRecord extends DataClass
     int? courtCount,
     String? pairingPolicy,
     String? scorePreset,
+    Value<String?> matchFormat = const Value.absent(),
+    Value<bool?> singleGame = const Value.absent(),
     bool? avoidRecentPartner,
     int? randomSeed,
     String? status,
@@ -596,6 +668,8 @@ class PlaySessionRecord extends DataClass
     courtCount: courtCount ?? this.courtCount,
     pairingPolicy: pairingPolicy ?? this.pairingPolicy,
     scorePreset: scorePreset ?? this.scorePreset,
+    matchFormat: matchFormat.present ? matchFormat.value : this.matchFormat,
+    singleGame: singleGame.present ? singleGame.value : this.singleGame,
     avoidRecentPartner: avoidRecentPartner ?? this.avoidRecentPartner,
     randomSeed: randomSeed ?? this.randomSeed,
     status: status ?? this.status,
@@ -621,6 +695,12 @@ class PlaySessionRecord extends DataClass
       scorePreset: data.scorePreset.present
           ? data.scorePreset.value
           : this.scorePreset,
+      matchFormat: data.matchFormat.present
+          ? data.matchFormat.value
+          : this.matchFormat,
+      singleGame: data.singleGame.present
+          ? data.singleGame.value
+          : this.singleGame,
       avoidRecentPartner: data.avoidRecentPartner.present
           ? data.avoidRecentPartner.value
           : this.avoidRecentPartner,
@@ -661,6 +741,8 @@ class PlaySessionRecord extends DataClass
           ..write('courtCount: $courtCount, ')
           ..write('pairingPolicy: $pairingPolicy, ')
           ..write('scorePreset: $scorePreset, ')
+          ..write('matchFormat: $matchFormat, ')
+          ..write('singleGame: $singleGame, ')
           ..write('avoidRecentPartner: $avoidRecentPartner, ')
           ..write('randomSeed: $randomSeed, ')
           ..write('status: $status, ')
@@ -683,6 +765,8 @@ class PlaySessionRecord extends DataClass
     courtCount,
     pairingPolicy,
     scorePreset,
+    matchFormat,
+    singleGame,
     avoidRecentPartner,
     randomSeed,
     status,
@@ -704,6 +788,8 @@ class PlaySessionRecord extends DataClass
           other.courtCount == this.courtCount &&
           other.pairingPolicy == this.pairingPolicy &&
           other.scorePreset == this.scorePreset &&
+          other.matchFormat == this.matchFormat &&
+          other.singleGame == this.singleGame &&
           other.avoidRecentPartner == this.avoidRecentPartner &&
           other.randomSeed == this.randomSeed &&
           other.status == this.status &&
@@ -723,6 +809,8 @@ class PlaySessionRecordsCompanion extends UpdateCompanion<PlaySessionRecord> {
   final Value<int> courtCount;
   final Value<String> pairingPolicy;
   final Value<String> scorePreset;
+  final Value<String?> matchFormat;
+  final Value<bool?> singleGame;
   final Value<bool> avoidRecentPartner;
   final Value<int> randomSeed;
   final Value<String> status;
@@ -740,6 +828,8 @@ class PlaySessionRecordsCompanion extends UpdateCompanion<PlaySessionRecord> {
     this.courtCount = const Value.absent(),
     this.pairingPolicy = const Value.absent(),
     this.scorePreset = const Value.absent(),
+    this.matchFormat = const Value.absent(),
+    this.singleGame = const Value.absent(),
     this.avoidRecentPartner = const Value.absent(),
     this.randomSeed = const Value.absent(),
     this.status = const Value.absent(),
@@ -758,6 +848,8 @@ class PlaySessionRecordsCompanion extends UpdateCompanion<PlaySessionRecord> {
     required int courtCount,
     required String pairingPolicy,
     required String scorePreset,
+    this.matchFormat = const Value.absent(),
+    this.singleGame = const Value.absent(),
     required bool avoidRecentPartner,
     required int randomSeed,
     required String status,
@@ -788,6 +880,8 @@ class PlaySessionRecordsCompanion extends UpdateCompanion<PlaySessionRecord> {
     Expression<int>? courtCount,
     Expression<String>? pairingPolicy,
     Expression<String>? scorePreset,
+    Expression<String>? matchFormat,
+    Expression<bool>? singleGame,
     Expression<bool>? avoidRecentPartner,
     Expression<int>? randomSeed,
     Expression<String>? status,
@@ -806,6 +900,8 @@ class PlaySessionRecordsCompanion extends UpdateCompanion<PlaySessionRecord> {
       if (courtCount != null) 'court_count': courtCount,
       if (pairingPolicy != null) 'pairing_policy': pairingPolicy,
       if (scorePreset != null) 'score_preset': scorePreset,
+      if (matchFormat != null) 'match_format': matchFormat,
+      if (singleGame != null) 'single_game': singleGame,
       if (avoidRecentPartner != null)
         'avoid_recent_partner': avoidRecentPartner,
       if (randomSeed != null) 'random_seed': randomSeed,
@@ -828,6 +924,8 @@ class PlaySessionRecordsCompanion extends UpdateCompanion<PlaySessionRecord> {
     Value<int>? courtCount,
     Value<String>? pairingPolicy,
     Value<String>? scorePreset,
+    Value<String?>? matchFormat,
+    Value<bool?>? singleGame,
     Value<bool>? avoidRecentPartner,
     Value<int>? randomSeed,
     Value<String>? status,
@@ -846,6 +944,8 @@ class PlaySessionRecordsCompanion extends UpdateCompanion<PlaySessionRecord> {
       courtCount: courtCount ?? this.courtCount,
       pairingPolicy: pairingPolicy ?? this.pairingPolicy,
       scorePreset: scorePreset ?? this.scorePreset,
+      matchFormat: matchFormat ?? this.matchFormat,
+      singleGame: singleGame ?? this.singleGame,
       avoidRecentPartner: avoidRecentPartner ?? this.avoidRecentPartner,
       randomSeed: randomSeed ?? this.randomSeed,
       status: status ?? this.status,
@@ -877,6 +977,12 @@ class PlaySessionRecordsCompanion extends UpdateCompanion<PlaySessionRecord> {
     }
     if (scorePreset.present) {
       map['score_preset'] = Variable<String>(scorePreset.value);
+    }
+    if (matchFormat.present) {
+      map['match_format'] = Variable<String>(matchFormat.value);
+    }
+    if (singleGame.present) {
+      map['single_game'] = Variable<bool>(singleGame.value);
     }
     if (avoidRecentPartner.present) {
       map['avoid_recent_partner'] = Variable<bool>(avoidRecentPartner.value);
@@ -924,6 +1030,8 @@ class PlaySessionRecordsCompanion extends UpdateCompanion<PlaySessionRecord> {
           ..write('courtCount: $courtCount, ')
           ..write('pairingPolicy: $pairingPolicy, ')
           ..write('scorePreset: $scorePreset, ')
+          ..write('matchFormat: $matchFormat, ')
+          ..write('singleGame: $singleGame, ')
           ..write('avoidRecentPartner: $avoidRecentPartner, ')
           ..write('randomSeed: $randomSeed, ')
           ..write('status: $status, ')
@@ -1796,6 +1904,17 @@ class $SessionCourtRecordsTable extends SessionCourtRecords
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _stayingPlayerIdMeta = const VerificationMeta(
+    'stayingPlayerId',
+  );
+  @override
+  late final GeneratedColumn<int> stayingPlayerId = GeneratedColumn<int>(
+    'staying_player_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     sessionId,
@@ -1804,6 +1923,7 @@ class $SessionCourtRecordsTable extends SessionCourtRecords
     matchId,
     name,
     stayingGroupId,
+    stayingPlayerId,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1862,6 +1982,15 @@ class $SessionCourtRecordsTable extends SessionCourtRecords
         ),
       );
     }
+    if (data.containsKey('staying_player_id')) {
+      context.handle(
+        _stayingPlayerIdMeta,
+        stayingPlayerId.isAcceptableOrUnknown(
+          data['staying_player_id']!,
+          _stayingPlayerIdMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1895,6 +2024,10 @@ class $SessionCourtRecordsTable extends SessionCourtRecords
         DriftSqlType.int,
         data['${effectivePrefix}staying_group_id'],
       ),
+      stayingPlayerId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}staying_player_id'],
+      ),
     );
   }
 
@@ -1912,6 +2045,7 @@ class SessionCourtRecord extends DataClass
   final int? matchId;
   final String name;
   final int? stayingGroupId;
+  final int? stayingPlayerId;
   const SessionCourtRecord({
     required this.sessionId,
     required this.number,
@@ -1919,6 +2053,7 @@ class SessionCourtRecord extends DataClass
     this.matchId,
     required this.name,
     this.stayingGroupId,
+    this.stayingPlayerId,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1932,6 +2067,9 @@ class SessionCourtRecord extends DataClass
     map['name'] = Variable<String>(name);
     if (!nullToAbsent || stayingGroupId != null) {
       map['staying_group_id'] = Variable<int>(stayingGroupId);
+    }
+    if (!nullToAbsent || stayingPlayerId != null) {
+      map['staying_player_id'] = Variable<int>(stayingPlayerId);
     }
     return map;
   }
@@ -1948,6 +2086,9 @@ class SessionCourtRecord extends DataClass
       stayingGroupId: stayingGroupId == null && nullToAbsent
           ? const Value.absent()
           : Value(stayingGroupId),
+      stayingPlayerId: stayingPlayerId == null && nullToAbsent
+          ? const Value.absent()
+          : Value(stayingPlayerId),
     );
   }
 
@@ -1963,6 +2104,7 @@ class SessionCourtRecord extends DataClass
       matchId: serializer.fromJson<int?>(json['matchId']),
       name: serializer.fromJson<String>(json['name']),
       stayingGroupId: serializer.fromJson<int?>(json['stayingGroupId']),
+      stayingPlayerId: serializer.fromJson<int?>(json['stayingPlayerId']),
     );
   }
   @override
@@ -1975,6 +2117,7 @@ class SessionCourtRecord extends DataClass
       'matchId': serializer.toJson<int?>(matchId),
       'name': serializer.toJson<String>(name),
       'stayingGroupId': serializer.toJson<int?>(stayingGroupId),
+      'stayingPlayerId': serializer.toJson<int?>(stayingPlayerId),
     };
   }
 
@@ -1985,6 +2128,7 @@ class SessionCourtRecord extends DataClass
     Value<int?> matchId = const Value.absent(),
     String? name,
     Value<int?> stayingGroupId = const Value.absent(),
+    Value<int?> stayingPlayerId = const Value.absent(),
   }) => SessionCourtRecord(
     sessionId: sessionId ?? this.sessionId,
     number: number ?? this.number,
@@ -1994,6 +2138,9 @@ class SessionCourtRecord extends DataClass
     stayingGroupId: stayingGroupId.present
         ? stayingGroupId.value
         : this.stayingGroupId,
+    stayingPlayerId: stayingPlayerId.present
+        ? stayingPlayerId.value
+        : this.stayingPlayerId,
   );
   SessionCourtRecord copyWithCompanion(SessionCourtRecordsCompanion data) {
     return SessionCourtRecord(
@@ -2005,6 +2152,9 @@ class SessionCourtRecord extends DataClass
       stayingGroupId: data.stayingGroupId.present
           ? data.stayingGroupId.value
           : this.stayingGroupId,
+      stayingPlayerId: data.stayingPlayerId.present
+          ? data.stayingPlayerId.value
+          : this.stayingPlayerId,
     );
   }
 
@@ -2016,14 +2166,22 @@ class SessionCourtRecord extends DataClass
           ..write('state: $state, ')
           ..write('matchId: $matchId, ')
           ..write('name: $name, ')
-          ..write('stayingGroupId: $stayingGroupId')
+          ..write('stayingGroupId: $stayingGroupId, ')
+          ..write('stayingPlayerId: $stayingPlayerId')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(sessionId, number, state, matchId, name, stayingGroupId);
+  int get hashCode => Object.hash(
+    sessionId,
+    number,
+    state,
+    matchId,
+    name,
+    stayingGroupId,
+    stayingPlayerId,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2033,7 +2191,8 @@ class SessionCourtRecord extends DataClass
           other.state == this.state &&
           other.matchId == this.matchId &&
           other.name == this.name &&
-          other.stayingGroupId == this.stayingGroupId);
+          other.stayingGroupId == this.stayingGroupId &&
+          other.stayingPlayerId == this.stayingPlayerId);
 }
 
 class SessionCourtRecordsCompanion extends UpdateCompanion<SessionCourtRecord> {
@@ -2043,6 +2202,7 @@ class SessionCourtRecordsCompanion extends UpdateCompanion<SessionCourtRecord> {
   final Value<int?> matchId;
   final Value<String> name;
   final Value<int?> stayingGroupId;
+  final Value<int?> stayingPlayerId;
   final Value<int> rowid;
   const SessionCourtRecordsCompanion({
     this.sessionId = const Value.absent(),
@@ -2051,6 +2211,7 @@ class SessionCourtRecordsCompanion extends UpdateCompanion<SessionCourtRecord> {
     this.matchId = const Value.absent(),
     this.name = const Value.absent(),
     this.stayingGroupId = const Value.absent(),
+    this.stayingPlayerId = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   SessionCourtRecordsCompanion.insert({
@@ -2060,6 +2221,7 @@ class SessionCourtRecordsCompanion extends UpdateCompanion<SessionCourtRecord> {
     this.matchId = const Value.absent(),
     this.name = const Value.absent(),
     this.stayingGroupId = const Value.absent(),
+    this.stayingPlayerId = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : sessionId = Value(sessionId),
        number = Value(number),
@@ -2071,6 +2233,7 @@ class SessionCourtRecordsCompanion extends UpdateCompanion<SessionCourtRecord> {
     Expression<int>? matchId,
     Expression<String>? name,
     Expression<int>? stayingGroupId,
+    Expression<int>? stayingPlayerId,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -2080,6 +2243,7 @@ class SessionCourtRecordsCompanion extends UpdateCompanion<SessionCourtRecord> {
       if (matchId != null) 'match_id': matchId,
       if (name != null) 'name': name,
       if (stayingGroupId != null) 'staying_group_id': stayingGroupId,
+      if (stayingPlayerId != null) 'staying_player_id': stayingPlayerId,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -2091,6 +2255,7 @@ class SessionCourtRecordsCompanion extends UpdateCompanion<SessionCourtRecord> {
     Value<int?>? matchId,
     Value<String>? name,
     Value<int?>? stayingGroupId,
+    Value<int?>? stayingPlayerId,
     Value<int>? rowid,
   }) {
     return SessionCourtRecordsCompanion(
@@ -2100,6 +2265,7 @@ class SessionCourtRecordsCompanion extends UpdateCompanion<SessionCourtRecord> {
       matchId: matchId ?? this.matchId,
       name: name ?? this.name,
       stayingGroupId: stayingGroupId ?? this.stayingGroupId,
+      stayingPlayerId: stayingPlayerId ?? this.stayingPlayerId,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -2125,6 +2291,9 @@ class SessionCourtRecordsCompanion extends UpdateCompanion<SessionCourtRecord> {
     if (stayingGroupId.present) {
       map['staying_group_id'] = Variable<int>(stayingGroupId.value);
     }
+    if (stayingPlayerId.present) {
+      map['staying_player_id'] = Variable<int>(stayingPlayerId.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -2140,6 +2309,7 @@ class SessionCourtRecordsCompanion extends UpdateCompanion<SessionCourtRecord> {
           ..write('matchId: $matchId, ')
           ..write('name: $name, ')
           ..write('stayingGroupId: $stayingGroupId, ')
+          ..write('stayingPlayerId: $stayingPlayerId, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();

@@ -21,7 +21,7 @@ class FdRallyPairDatabase extends _$FdRallyPairDatabase {
     : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration {
@@ -33,6 +33,9 @@ class FdRallyPairDatabase extends _$FdRallyPairDatabase {
         }
         if (from >= 3 && from < 4) {
           await _upgradeSessionModel(migrator);
+        }
+        if (from >= 3 && from < 5) {
+          await _upgradeMatchFormatModel(migrator);
         }
       },
     );
@@ -81,6 +84,18 @@ class FdRallyPairDatabase extends _$FdRallyPairDatabase {
     await migrator.addColumn(
       sessionMatchRecords,
       sessionMatchRecords.rotationMode,
+    );
+  }
+
+  Future<void> _upgradeMatchFormatModel(Migrator migrator) async {
+    await migrator.addColumn(
+      playSessionRecords,
+      playSessionRecords.matchFormat,
+    );
+    await migrator.addColumn(playSessionRecords, playSessionRecords.singleGame);
+    await migrator.addColumn(
+      sessionCourtRecords,
+      sessionCourtRecords.stayingPlayerId,
     );
   }
 

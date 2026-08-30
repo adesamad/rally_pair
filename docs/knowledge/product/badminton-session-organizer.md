@@ -1,11 +1,11 @@
 # 羽搭 / RallyPair 产品方向文档
 
 product_state: ready
-baseline_revision: 2026-08-27
+baseline_revision: 2026-08-30
 
 本文是“羽搭 / RallyPair”的当前有效产品基线。正式中文名、英文名和内部代号均已确定；后续计划、执行规格、App 设计、Flutter 实现、数据迁移和验收标准必须优先读取本文。
 
-2026-08-27 起，V1 的核心运行模型从“个人候场、每轮临时配对、比赛后四人全部回队”修订为“玩家组成持续双人组、双人组按队列进入具体场地、比分完成后按轮转方式决定留场或下场”。旧模型不再作为实现依据。
+2026-08-30 起，V1 收敛为单场地，并在创建时选择单打或双打。单打以个人为候场和轮转单位；双打继续使用持续双人组。11 分和 21 分都只记录一局最终比分。旧多场地和旧多局数据只用于非破坏兼容。
 
 ## 1. Product Goal
 
@@ -56,18 +56,18 @@ V1 必须闭合以下能力：
 4. 支持批量粘贴玩家名单，每行一个名称。
 5. 将未上场玩家切换为可组队、休息或离场状态。
 6. 动态添加、命名和移除本场场地；进行中的场地不能删除。
-7. 仅支持羽毛球双打，每个 `PairingGroup` 固定两名玩家，每场固定两个组。
+7. 创建时必须选择单打或双打；开始后赛制冻结。
 8. 支持随机组队：对当前可组队且未成组的玩家洗牌后两两成组。
 9. 支持手动组队：组织者选择两名未成组玩家建立一组。
 10. 奇数玩家允许保持未成组，不创建残缺双人组。
 11. 双人组创建后持续存在，直到组织者在允许状态下主动换人或解散。
 12. 支持随机打乱候场组顺序。
 13. 支持手动调整候场组顺序。
-14. 支持自动从候场队首为可用场地分配两组。
-15. 支持组织者为指定场地手动选择两组。
-16. 场地分配后以具象化羽毛球场承载两组、四名玩家和比赛状态。
-17. 比赛开始后锁定该场两组和四名玩家。
-18. 比赛结束后支持仅记录胜方，或录入各局最终比分。
+14. 新建和复制球局固定一块场地，不提供场地增删。
+15. 单打从个人候场队列选择两人；双打从组候场队列选择两组。
+16. 具象化羽毛球场按赛制承载两人或四名玩家和比赛状态。
+17. 比赛开始后锁定当前两名或四名玩家。
+18. 比赛结束后支持仅记录胜方，或录入一局最终比分。
 19. 提供 `quick_11` 和 `standard_21` 两种比分预设。
 20. 比分提交后，场地进入 `awaiting_rotation`，不能直接释放或让四名玩家全部回队。
 21. 支持 `winner_stays`：胜方留场、败方下场、候场队首下一组补位。
@@ -82,7 +82,7 @@ V1 必须闭合以下能力：
 
 ## 4. Non Goals
 
-- 不做单打、混双规则或跨运动通用排场。
+- 不做混双、单场临时切换赛制或跨运动通用排场。
 - 不做逐球实时计分、裁判台、发球权和站位自动判断。
 - 不做专业赛事报名、种子、签表、赛程、晋级和奖项。
 - 不做 Elo、TrueSkill、官方等级或竞技能力评估。
@@ -101,12 +101,10 @@ V1 必须闭合以下能力：
 ### Runtime Required Feature
 
 - 本地球局及配置快照。
-- 本场玩家和动态场地。
-- 随机组队与手动组队。
-- 持续双人组身份和组状态。
-- 随机候场顺序与手动候场排序。
-- 双人组与具体场地分配。
-- 具象化场地上的两组、四人和比赛状态。
+- 本场玩家、球局级单双打形式和唯一具象场地。
+- 单打个人候场；双打随机或手动组成持续双人组。
+- 个人或双人组的随机候场顺序与手动候场排序。
+- 与赛制人数一致的场地分配和比赛状态。
 - 比赛开始、结果录入和取消。
 - `winner_stays` 与 `all_rotate` 两种赛后轮转。
 - 场地等待下一组和继续下一场。
@@ -144,24 +142,24 @@ Expansion Feature 不进入 V1，除非后续明确改变产品目标。
 首次球局链路：
 
 ```text
-组织者创建球局
+组织者创建球局并选择单打或双打
 -> 添加或批量粘贴玩家
--> 添加并命名实际使用的场地
--> 选择随机组队或手动组队
--> 系统生成持续 PairingGroup；奇数剩余玩家保持 ungrouped
--> 组织者随机打乱候场组顺序或手动排序
+-> 系统自动建立唯一场地
+-> 单打进入个人候场；双打选择随机组队或手动组队
+-> 双打生成持续 PairingGroup；奇数剩余玩家保持 ungrouped
+-> 组织者随机打乱候场单位顺序或手动排序
 -> 组织者确认开始球局，比分预设和默认轮转方式被冻结
--> 组织者自动为可用场地取队首两组，或手动选择指定两组
+-> 组织者按赛制自动或手动选择两名玩家 / 两个双人组
 -> Court.available -> Court.ready
--> 具象化场地显示两组四人的空间位置
+-> 具象化场地显示单打两人或双打四人的空间位置
 -> 组织者确认比赛开始
 -> Court.ready -> Court.in_play
--> 比赛结束后组织者选择胜方或录入各局最终比分
+-> 比赛结束后组织者选择胜方或录入一局最终比分
 -> Match.in_progress -> Match.result_recorded
 -> Court.in_play -> Court.awaiting_rotation
 -> 组织者选择 winner_stays 或 all_rotate
 -> 系统原子更新组队列、场地和下一场
--> 组织者继续各场地比赛
+-> 组织者继续下一场比赛
 -> 无需继续时处理完所有未决轮转并结束球局
 -> 系统冻结球局并生成总结
 ```
@@ -549,7 +547,7 @@ Match.result_recorded + Court.awaiting_rotation
 - input fields: courtId
 - boundary checks: 取队首两组；每组只能属于一个非终态 Match
 - state transition: 两组 waiting -> assigned；Court.available -> ready；none -> Match.ready
-- success result: 场地具象化显示两组四人的位置
+- success result: 双打场地具象化显示两组四人的位置
 - failure result: 不创建残缺 Match
 - recovery path: 补充组、调整队列或手动选择
 - owner: PlaySession
@@ -978,7 +976,7 @@ terminal states: dissolved, archived。
 
 - from: ready
   event/action: start_match
-  guard condition: 两组、四人和场地状态一致
+  guard condition: 参赛 side 人数与 matchFormat 一致且场地状态一致
   to: in_progress
   actor: LocalOrganizer
   side effects: 两组 playing，Court.in_play
@@ -1148,13 +1146,13 @@ terminal states: deleted；Court 生命周期跟随 PlaySession。
 
 ### Boundary Check: court_identity_and_capacity
 
-- action_id: add_court / remove_court
-- check_type: duplicate
-- condition: 场地名称唯一，总数不超过 8；只有 available 场地可删除
-- block result: 场地集合和历史引用保持不变
-- feedback: 显示重名、容量或占用原因
-- recovery path: 改名、处理当前比赛或移除其他空闲场地
-- verification assertion: 删除非 available 场地必须失败
+- action_id: create_session / duplicate_session
+- check_type: capacity
+- condition: 新球局始终只创建一块场地
+- block result: 不产生第二块新场地
+- feedback: V1 固定使用一块场地
+- recovery path: 不适用；旧多场地仅兼容读取
+- verification assertion: 新建和复制后 Court 数量均为 1
 
 ### Boundary Check: assignment_uniqueness
 
@@ -1164,7 +1162,7 @@ terminal states: deleted；Court 生命周期跟随 PlaySession。
 - block result: 不提交任何冲突分配
 - feedback: 指出冲突组和场地
 - recovery path: 选择其他组或取消原分配
-- verification assertion: 多场地分配后参与组集合无重复 ID
+- verification assertion: 单场地连续分配后参与单位无重复 ID
 
 ### Boundary Check: assignment_capacity
 
@@ -1424,6 +1422,7 @@ Match belongsTo Court
 Match hasExactlyTwo PairingGroup snapshots
 Court hasZeroOrOne current Match
 Court hasZeroOrOne staying PairingGroup
+Court hasZeroOrOne staying SessionPlayer
 PlaySession derives PlayerSummary and GroupSummary from completed Match collection
 ```
 
@@ -1431,8 +1430,8 @@ PlaySession derives PlayerSummary and GroupSummary from completed Match collecti
 
 - `PlaySession` 是唯一聚合根。
 - `SessionPlayer` 仅在一场球局内有效，不等同于全局账号。
-- `PairingGroup` 是跨多场持续存在的双人组，不是 Match 内的临时 `Team` 值。
-- `Match` 保存两组及四名玩家的当场快照；后续换人不改变历史阵容。
+- `PairingGroup` 是双打中跨多轮持续存在的双人组，不是 Match 内的临时 `Team` 值；单打不创建组。
+- `Match` 保存两个 side 的当场快照；单打每 side 一人，双打每 side 两人。
 - `Court` 是具象化现场场地，承载当前 Match、比分上下文和轮转状态，但不代表真实场馆数据。
 - `PlayerSummary` 和 `GroupSummary` 是派生结果，不是可编辑实体。
 
@@ -1464,15 +1463,15 @@ PlaySession derives PlayerSummary and GroupSummary from completed Match collecti
 ### Court Interaction Representation
 
 - 具象化场地是 CourtWorkspace 的核心业务表达，不是装饰背景。
-- 每块场地必须同时表达场地身份、两组、四名玩家、比赛状态、比分和下一动作。
-- 两组位于球网两侧，每组两名玩家有稳定可辨识的位置。
+- 唯一场地必须同时表达场地身份、参赛双方、比赛状态、比分和下一动作。
+- 双方位于球网两侧；单打各一人居中，双打每侧两人保持稳定可辨识的位置。
 - available、ready、in_play、awaiting_rotation、waiting_opponent 必须在同一场地对象上切换，不用多个互不关联的普通卡片替代。
-- 多场地以多个独立场地对象呈现，每块场地可处于不同运行状态。
+- 新流程只呈现一块场地；旧多场地球局保持原对象用于兼容收尾。
 
 ### Score Preset
 
 - `quick_11`: 一局定胜负，先到 11 分获胜，不启用加分延长。
-- `standard_21`: 三局两胜；每局 21 分；20 平后领先 2 分获胜；30 分封顶。
+- `standard_21`: 一局定胜负；21 分；20 平后领先 2 分获胜；30 分封顶。
 - `winner_only`: 只保存胜方，不产生得失分。
 - `game_scores`: 保存各局最终比分并派生胜方。
 - V1 不跟踪逐球历史、发球权、局间换边和暂停。
@@ -1509,8 +1508,8 @@ PlaySession derives PlayerSummary and GroupSummary from completed Match collecti
 3. `manual_groups`: 8 名玩家、4 个人工组、2 块 available 场地。
 4. `random_group_queue`: 6 个 waiting 组，验证固定种子顺序。
 5. `manual_group_queue`: 6 个 waiting 组，验证手动排序恢复。
-6. `active_ready_courts`: 2 块 Court.ready、4 组 assigned、2 组 waiting。
-7. `active_mixed_courts`: 一块 in_play、一块 awaiting_rotation、一块 available。
+6. `singles_ready_court`: 一块 Court.ready、2 名玩家 assigned。
+7. `doubles_ready_court`: 一块 Court.ready、2 组 assigned。
 8. `winner_stays_with_next`: 胜方留场且有下一组补位。
 9. `winner_stays_without_next`: 胜方 staying，Court.waiting_opponent。
 10. `all_rotate_with_two_next`: 两组下场且两组既有 waiting 上场。
@@ -1521,10 +1520,9 @@ PlaySession derives PlayerSummary and GroupSummary from completed Match collecti
 ### Required Score Samples
 
 - quick_11: 11:7。
-- standard_21 straight games: 21:15, 21:18。
-- standard_21 three games: 21:18, 17:21, 22:20。
+- standard_21 single game: 21:15。
 - valid cap: 30:29。
-- invalid samples: 20:20, 21:20, 30:28, 31:29, 三局全部由同一方获胜但仍录入第三局。
+- invalid samples: 20:20, 21:20, 30:28, 31:29，以及任何多局输入。
 
 ### State Coverage
 
@@ -1541,10 +1539,10 @@ PlaySession derives PlayerSummary and GroupSummary from completed Match collecti
 
 ### Assumption
 
-- assumption: V1 仅支持双打，每个有效组固定两名玩家。
-- why low risk: 用户已确认目标围绕随机或手动双人组、场地对阵和上下场轮转。
-- affected logic: 组容量、场地分配、比赛和统计。
-- validation needed: 使用 5、8、10、12 名玩家和 1 至 4 块场地完成手工走查。
+- assumption: V1 在建局时选择单打或双打，active 后不允许切换。
+- why low risk: 用户已明确确认单双打均需支持，且不做混合赛制球局。
+- affected logic: 候场单位、场地分配、比赛、轮转和统计。
+- validation needed: 分别使用单打 2–6 人和双打 4–12 人完成手工走查。
 
 ### Assumption
 
@@ -1590,33 +1588,29 @@ PlaySession derives PlayerSummary and GroupSummary from completed Match collecti
 - blocks readiness: no
 - required clarification: 默认不进入 V1，后续单独评估。
 
-## 19. Launch-Blocking TODOs
+## 19. Completed Launch-Blocking Work
 
-### Launch-Blocking TODO: replace_legacy_runtime_model
+### Completed: replace_legacy_runtime_model
 
 - required item: 将当前个人候场、临时 Team 和四人统一回队模型替换为持续 PairingGroup、组队列和场地轮转模型
 - why runtime-required: 当前实现无法表达用户已确认的核心上下场业务
-- current missing condition: 领域模型、持久化和测试仍基于旧状态机
-- blocked runtime flow: 随机/手动组队、组排序、winner_stays、all_rotate、waiting_opponent
+- completion evidence: 领域模型、schema v5、存储往返和自动化测试已覆盖单双打与两种轮转
+- delivered runtime flow: 单打个人队列、双打组队与组排序、winner_stays、all_rotate、waiting_opponent
 - owner or required dependency: 后续 plan-spec / exec-spec / code-flow
 - unblock condition: 新领域状态机、迁移策略和测试全部通过
 - temporary workaround allowed: no
 
-### Launch-Blocking TODO: implement_court_object_renderer
+### Completed: implement_court_object_renderer
 
-- required item: 以具象化羽毛球场呈现两组、四人、比分和轮转状态
+- required item: 以具象化羽毛球场按赛制呈现双方、比分和轮转状态
 - why runtime-required: 场地是分配、比分和上下场决策的核心运行对象
-- current missing condition: 当前 Flutter 仅使用普通 A/B 文字卡片
-- blocked runtime flow: 场地分配确认、分场地比分、awaiting_rotation 和补位理解
+- completion evidence: Flutter CourtWorkspace 已按单打两人 / 双打四人显示参赛位置和运行状态
+- delivered runtime flow: 场地分配确认、单局比分、awaiting_rotation 和补位理解
 - owner or required dependency: app-design / flutter-ui-production
 - unblock condition: available、ready、in_play、awaiting_rotation、waiting_opponent 五类场地状态可在同一对象上验证
 - temporary workaround allowed: no
 
-正式编码前还必须：
-
-- 生成 plan-spec 和 exec-spec，明确旧数据兼容或重建策略。
-- 为随机组队、随机排序、轮转排除和原子更新建立自动化测试。
-- 不以现有测试通过作为新 V1 已完成的证据。
+后续发布前仍需在真实设备走查长名单、放大字体、比分弹窗和连续轮转手感。
 
 ## 20. Logic Completeness Validation
 
@@ -1626,7 +1620,7 @@ PlaySession derives PlayerSummary and GroupSummary from completed Match collecti
 - PlaySession、SessionPlayer、PairingGroup、Match 和 Court 均有状态机和 owner。
 - 每个核心动作均有边界、失败结果、恢复路径和测试断言。
 - 具象化场地被锁定为 CourtWorkspace 的核心对象表达，而非普通信息卡。
-- 多场地、候场不足、奇数玩家、未决轮转和历史比分修正均有恢复逻辑。
+- 单场地、单双打候场不足、奇数双打玩家、未决轮转和历史比分修正均有恢复逻辑。
 - 不存在 `blocks readiness: yes` 的 Unknown。
 
 Logic Completeness Gate: PASS。
@@ -1635,4 +1629,4 @@ Logic Completeness Gate: PASS。
 
 Verdict: `REQUIREMENT LOGIC READY`
 
-本文可作为后续 `plan-spec`、`exec-spec`、App 设计、领域模型重构、数据迁移和 Flutter 实现的基础逻辑输入。当前代码属于待替换的旧运行模型，不得再以旧测试通过声明 V1 与本基线一致。
+本文与 2026-08-30 的单场地运行模型决策共同作为当前实现和后续迭代的产品基线。

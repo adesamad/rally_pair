@@ -2,6 +2,41 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rally_pair/play_session/play_session.dart';
 
 void main() {
+  group('单打个人候场', () {
+    test('按个人顺序安排两人并记录一局 21 分', () {
+      final session = _singles(4)..start();
+
+      final match = session.assignNext(1);
+      expect(match.players, [1, 2]);
+      expect(match.teamA.second, isNull);
+      expect(match.teamB.second, isNull);
+
+      session.startMatch(match.id);
+      session.finishMatch(
+        match.id,
+        MatchResult.gameScores(const [GameScore(21, 17)]),
+      );
+      session.resolveWinnerStays(match.id);
+
+      final next = session.matches.last;
+      expect(next.state, MatchState.ready);
+      expect(next.players, containsAll([1, 3]));
+      expect(session.waitingPlayers.map((player) => player.id), [4, 2]);
+    });
+
+    test('双方下场时优先安排原本候场的两人', () {
+      final session = _singles(6)..start();
+      final match = session.assignNext(1);
+      session.startMatch(match.id);
+      session.finishMatch(match.id, MatchResult.winnerOnly(Side.b));
+
+      session.resolveAllRotate(match.id);
+
+      expect(session.matches.last.players, containsAll([3, 4]));
+      expect(session.waitingPlayers.map((player) => player.id), [5, 6, 1, 2]);
+    });
+  });
+
   group('持续双人组', () {
     test('随机组队保留奇数未成组玩家', () {
       final session = _draft(5);
@@ -170,7 +205,7 @@ void main() {
       expect(session.courts.first.state, CourtState.available);
     });
 
-    test('结束后复制只保留设置、具名场地和玩家名单', () {
+    test('结束后复制只保留玩家名单并收敛为单场地单局', () {
       final session = PlaySession.create(
         id: 3,
         setup: const SessionSetup(
@@ -192,7 +227,9 @@ void main() {
       final duplicate = session.duplicate(id: 4, title: '新球局');
 
       expect(duplicate.status, SessionStatus.draft);
-      expect(duplicate.courts.map((court) => court.name), ['靠窗场', '中间场']);
+      expect(duplicate.courts.map((court) => court.name), ['1 号场']);
+      expect(duplicate.setup.courtCount, 1);
+      expect(duplicate.setup.singleGame, isTrue);
       expect(duplicate.players, hasLength(4));
       expect(duplicate.groups, isEmpty);
       expect(duplicate.matches, isEmpty);
@@ -212,6 +249,23 @@ PlaySession _draft(int players) {
   );
   for (var index = 1; index <= players; index++) {
     session.addPlayer('玩家$index');
+  }
+  return session;
+}
+
+PlaySession _singles(int players) {
+  final session = PlaySession.create(
+    id: 20,
+    setup: const SessionSetup(
+      title: '单打练习',
+      courtCount: 1,
+      matchFormat: MatchFormat.singles,
+      scorePreset: ScorePreset.standard21,
+      randomSeed: 20,
+    ),
+  );
+  for (var index = 1; index <= players; index++) {
+    session.addPlayer('单打$index');
   }
   return session;
 }

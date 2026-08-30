@@ -193,6 +193,7 @@ final class PlaySession {
   void updateSetup(SessionSetup setup) {
     _requireStatus(SessionStatus.draft);
     final valid = _validSetup(setup);
+    final formatChanged = valid.matchFormat != _setup.matchFormat;
     _setup = valid;
     final existing = courts.take(valid.courtCount).toList(growable: false);
     final updated = <int, Court>{
@@ -208,6 +209,7 @@ final class PlaySession {
       nextNumber++;
     }
     _courts = updated;
+    if (formatChanged) _resetFormatPreparation();
   }
 
   Court addCourt(String name) {
@@ -300,7 +302,10 @@ final class PlaySession {
   void setResting(int playerId) {
     _requireStatus(SessionStatus.active);
     final player = _player(playerId);
-    _requirePlayerState(player, PlayerState.ungrouped);
+    final waitingState = _setup.matchFormat == MatchFormat.singles
+        ? PlayerState.waiting
+        : PlayerState.ungrouped;
+    _requirePlayerState(player, waitingState);
     _players[playerId] = player.copyWith(state: PlayerState.resting);
   }
 
@@ -312,7 +317,9 @@ final class PlaySession {
       throw const RuleViolation('player_state_locked');
     }
     _players[playerId] = player.copyWith(
-      state: PlayerState.ungrouped,
+      state: _setup.matchFormat == MatchFormat.singles
+          ? PlayerState.waiting
+          : PlayerState.ungrouped,
       queueOrder: _takeQueueOrder(),
     );
   }
@@ -321,6 +328,7 @@ final class PlaySession {
     _requireStatus(SessionStatus.active);
     final player = _player(playerId);
     if (player.state != PlayerState.ungrouped &&
+        player.state != PlayerState.waiting &&
         player.state != PlayerState.resting) {
       throw const RuleViolation('player_state_locked');
     }
@@ -343,7 +351,12 @@ final class PlaySession {
 
   void start() {
     _requireStatus(SessionStatus.draft);
-    if (waitingGroups.length < 2 || _courts.isEmpty) {
+    if (_courts.isEmpty) throw const RuleViolation('court_required');
+    if (_setup.matchFormat == MatchFormat.singles) {
+      if (waitingPlayers.length < 2) {
+        throw const RuleViolation('two_waiting_players_required');
+      }
+    } else if (waitingGroups.length < 2) {
       throw const RuleViolation('two_waiting_groups_required');
     }
     _status = SessionStatus.active;
@@ -351,6 +364,9 @@ final class PlaySession {
 
   List<PairingGroup> generateRandomGroups([Iterable<int>? selectedPlayerIds]) {
     _requirePlayerEditing();
+    if (_setup.matchFormat != MatchFormat.doubles) {
+      throw const RuleViolation('match_format_mismatch');
+    }
     final selected = selectedPlayerIds?.toSet();
     final eligible = _players.values
         .where(
@@ -371,6 +387,9 @@ final class PlaySession {
 
   PairingGroup createManualGroup(int firstPlayerId, int secondPlayerId) {
     _requirePlayerEditing();
+    if (_setup.matchFormat != MatchFormat.doubles) {
+      throw const RuleViolation('match_format_mismatch');
+    }
     if (firstPlayerId == secondPlayerId) {
       throw const RuleViolation('group_players_must_differ');
     }
@@ -424,6 +443,9 @@ final class PlaySession {
   }
 
   void randomizeGroupQueue() {
+    if (_setup.matchFormat != MatchFormat.doubles) {
+      throw const RuleViolation('match_format_mismatch');
+    }
     final shuffled = Pairing.shuffle(
       waitingGroups.map((group) => group.id).toList(),
       _seed(1),
@@ -437,6 +459,9 @@ final class PlaySession {
   }
 
   void reorderGroup(int groupId, int targetIndex) {
+    if (_setup.matchFormat != MatchFormat.doubles) {
+      throw const RuleViolation('match_format_mismatch');
+    }
     final ordered = waitingGroups.toList();
     final sourceIndex = ordered.indexWhere((group) => group.id == groupId);
     if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= ordered.length) {
@@ -449,19 +474,103 @@ final class PlaySession {
     }
   }
 
+  void randomizePlayerQueue() {
+    _requireStatus(SessionStatus.active);
+    if (_setup.matchFormat != MatchFormat.singles) {
+      throw const RuleViolation('match_format_mismatch');
+    }
+    final shuffled = Pairing.shuffle(
+      waitingPlayers.map((player) => player.id).toList(),
+      _seed(1),
+    );
+    for (var index = 0; index < shuffled.length; index++) {
+      final player = _player(shuffled[index]);
+      _players[player.id] = player.copyWith(queueOrder: index);
+    }
+    _nextQueueOrder = max(_nextQueueOrder, shuffled.length);
+    _pairingRound++;
+  }
+
+  void reorderPlayer(int playerId, int targetIndex) {
+    _requireStatus(SessionStatus.active);
+    if (_setup.matchFormat != MatchFormat.singles) {
+      throw const RuleViolation('match_format_mismatch');
+    }
+    final ordered = waitingPlayers.toList();
+    final sourceIndex = ordered.indexWhere((player) => player.id == playerId);
+    if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= ordered.length) {
+      throw const RuleViolation('player_order_out_of_range');
+    }
+    final player = ordered.removeAt(sourceIndex);
+    ordered.insert(targetIndex, player);
+    for (var index = 0; index < ordered.length; index++) {
+      _players[ordered[index].id] = ordered[index].copyWith(queueOrder: index);
+    }
+  }
+
   List<SessionMatch> generateAssignments() {
     _requireStatus(SessionStatus.active);
     final created = <SessionMatch>[];
     for (final court in courts.where(
       (court) => court.state == CourtState.available,
     )) {
-      if (waitingGroups.length < 2) break;
-      created.add(assignNextGroups(court.number));
+      if (_setup.matchFormat == MatchFormat.singles) {
+        if (waitingPlayers.length < 2) break;
+      } else if (waitingGroups.length < 2) {
+        break;
+      }
+      created.add(assignNext(court.number));
     }
     return List.unmodifiable(created);
   }
 
+  SessionMatch assignNext(int courtNumber) {
+    return _setup.matchFormat == MatchFormat.singles
+        ? assignNextPlayers(courtNumber)
+        : assignNextGroups(courtNumber);
+  }
+
+  SessionMatch assignNextPlayers(int courtNumber) {
+    if (_setup.matchFormat != MatchFormat.singles) {
+      throw const RuleViolation('match_format_mismatch');
+    }
+    if (waitingPlayers.length < 2) {
+      throw const RuleViolation('two_waiting_players_required');
+    }
+    return assignPlayers(
+      courtNumber: courtNumber,
+      firstPlayerId: waitingPlayers[0].id,
+      secondPlayerId: waitingPlayers[1].id,
+    );
+  }
+
+  SessionMatch assignPlayers({
+    required int courtNumber,
+    required int firstPlayerId,
+    required int secondPlayerId,
+  }) {
+    _requireStatus(SessionStatus.active);
+    if (_setup.matchFormat != MatchFormat.singles) {
+      throw const RuleViolation('match_format_mismatch');
+    }
+    if (firstPlayerId == secondPlayerId) {
+      throw const RuleViolation('players_must_differ');
+    }
+    final court = _court(courtNumber);
+    if (court.state != CourtState.available) {
+      throw const RuleViolation('court_not_available');
+    }
+    final first = _player(firstPlayerId);
+    final second = _player(secondPlayerId);
+    _requirePlayerState(first, PlayerState.waiting);
+    _requirePlayerState(second, PlayerState.waiting);
+    return _createSinglesMatch(court, first, second);
+  }
+
   SessionMatch assignNextGroups(int courtNumber) {
+    if (_setup.matchFormat != MatchFormat.doubles) {
+      throw const RuleViolation('match_format_mismatch');
+    }
     if (waitingGroups.length < 2) {
       throw const RuleViolation('two_waiting_groups_required');
     }
@@ -478,6 +587,9 @@ final class PlaySession {
     required int secondGroupId,
   }) {
     _requireStatus(SessionStatus.active);
+    if (_setup.matchFormat != MatchFormat.doubles) {
+      throw const RuleViolation('match_format_mismatch');
+    }
     if (firstGroupId == secondGroupId) {
       throw const RuleViolation('groups_must_differ');
     }
@@ -499,10 +611,15 @@ final class PlaySession {
         .where((match) => match.state == MatchState.ready)
         .toList();
     if (ready.isEmpty) return const [];
-    final returning = <int>[];
+    final returningGroups = <int>[];
+    final returningPlayers = <int>[];
     for (final match in ready) {
-      if (match.groupAId != null) returning.add(match.groupAId!);
-      if (match.groupBId != null) returning.add(match.groupBId!);
+      if (_setup.matchFormat == MatchFormat.singles) {
+        returningPlayers.addAll(match.players);
+      } else {
+        if (match.groupAId != null) returningGroups.add(match.groupAId!);
+        if (match.groupBId != null) returningGroups.add(match.groupBId!);
+      }
       _matches[match.id] = match.copyWith(state: MatchState.canceled);
       final court = _court(match.courtNumber);
       _courts[court.number] = court.copyWith(
@@ -510,7 +627,11 @@ final class PlaySession {
         clearMatch: true,
       );
     }
-    _returnGroupsToFront(returning);
+    if (_setup.matchFormat == MatchFormat.singles) {
+      _returnPlayersToFront(returningPlayers);
+    } else {
+      _returnGroupsToFront(returningGroups);
+    }
     return generateAssignments();
   }
 
@@ -550,19 +671,33 @@ final class PlaySession {
         court.matchId != matchId) {
       throw const RuleViolation('court_match_mismatch');
     }
-    final groups = _matchGroups(match);
-    for (final group in groups) {
-      _requireGroupState(group, GroupState.assigned);
+    if (_setup.matchFormat == MatchFormat.singles) {
+      for (final playerId in match.players) {
+        final player = _player(playerId);
+        _requirePlayerState(player, PlayerState.assigned);
+      }
+    } else {
+      final groups = _matchGroups(match);
+      for (final group in groups) {
+        _requireGroupState(group, GroupState.assigned);
+      }
     }
-
     _matches[matchId] = match.copyWith(state: MatchState.inProgress);
     _courts[court.number] = court.copyWith(state: CourtState.inPlay);
-    for (final group in groups) {
-      _groups[group.id] = group.copyWith(state: GroupState.playing);
-      for (final playerId in group.players) {
+    if (_setup.matchFormat == MatchFormat.singles) {
+      for (final playerId in match.players) {
         _players[playerId] = _player(
           playerId,
         ).copyWith(state: PlayerState.playing);
+      }
+    } else {
+      for (final group in _matchGroups(match)) {
+        _groups[group.id] = group.copyWith(state: GroupState.playing);
+        for (final playerId in group.players) {
+          _players[playerId] = _player(
+            playerId,
+          ).copyWith(state: PlayerState.playing);
+        }
       }
     }
   }
@@ -577,23 +712,40 @@ final class PlaySession {
     if (court.state != CourtState.inPlay || court.matchId != matchId) {
       throw const RuleViolation('court_match_mismatch');
     }
-    final groups = _matchGroups(match);
-    for (final group in groups) {
-      _requireGroupState(group, GroupState.playing);
+    if (_setup.matchFormat == MatchFormat.singles) {
+      for (final playerId in match.players) {
+        _requirePlayerState(_player(playerId), PlayerState.playing);
+      }
+    } else {
+      for (final group in _matchGroups(match)) {
+        _requireGroupState(group, GroupState.playing);
+      }
     }
-    ScoreRules.validate(_setup.scorePreset, result);
+    ScoreRules.validate(
+      _setup.scorePreset,
+      result,
+      allowLegacySeries: !_setup.singleGame,
+    );
 
     _matches[matchId] = match.copyWith(
       state: MatchState.resultRecorded,
       result: result,
     );
     _courts[court.number] = court.copyWith(state: CourtState.awaitingRotation);
-    for (final group in groups) {
-      _groups[group.id] = group.copyWith(state: GroupState.awaitingRotation);
-      for (final playerId in group.players) {
+    if (_setup.matchFormat == MatchFormat.singles) {
+      for (final playerId in match.players) {
         _players[playerId] = _player(
           playerId,
         ).copyWith(state: PlayerState.awaitingRotation);
+      }
+    } else {
+      for (final group in _matchGroups(match)) {
+        _groups[group.id] = group.copyWith(state: GroupState.awaitingRotation);
+        for (final playerId in group.players) {
+          _players[playerId] = _player(
+            playerId,
+          ).copyWith(state: PlayerState.awaitingRotation);
+        }
       }
     }
   }
@@ -612,17 +764,23 @@ final class PlaySession {
     if (court.state != expectedCourtState || court.matchId != matchId) {
       throw const RuleViolation('court_match_mismatch');
     }
-    final groups = _matchGroups(match);
-
     _matches[matchId] = match.copyWith(state: MatchState.canceled);
     _courts[court.number] = court.copyWith(
       state: CourtState.available,
       clearMatch: true,
     );
-    _returnGroupsToFront(groups.map((group) => group.id));
+    if (_setup.matchFormat == MatchFormat.singles) {
+      _returnPlayersToFront(match.players);
+    } else {
+      _returnGroupsToFront(_matchGroups(match).map((group) => group.id));
+    }
   }
 
   void resolveWinnerStays(int matchId) {
+    if (_setup.matchFormat == MatchFormat.singles) {
+      _resolveSinglesWinnerStays(matchId);
+      return;
+    }
     final match = _match(matchId);
     _requireResultRecorded(match);
     final court = _court(match.courtNumber);
@@ -654,6 +812,10 @@ final class PlaySession {
   }
 
   void resolveAllRotate(int matchId) {
+    if (_setup.matchFormat == MatchFormat.singles) {
+      _resolveSinglesAllRotate(matchId);
+      return;
+    }
     final match = _match(matchId);
     _requireResultRecorded(match);
     final court = _court(match.courtNumber);
@@ -673,6 +835,10 @@ final class PlaySession {
   }
 
   void fillStayingCourt(int courtNumber, [int? selectedGroupId]) {
+    if (_setup.matchFormat == MatchFormat.singles) {
+      _fillSinglesCourt(courtNumber, selectedGroupId);
+      return;
+    }
     final court = _court(courtNumber);
     if (court.state != CourtState.waitingOpponent ||
         court.stayingGroupId == null) {
@@ -693,6 +859,20 @@ final class PlaySession {
   }
 
   void releaseStayingCourt(int courtNumber) {
+    if (_setup.matchFormat == MatchFormat.singles) {
+      final court = _court(courtNumber);
+      if (court.state != CourtState.waitingOpponent ||
+          court.stayingPlayerId == null) {
+        throw const RuleViolation('court_not_waiting_opponent');
+      }
+      _enqueuePlayer(_player(court.stayingPlayerId!));
+      _courts[court.number] = court.copyWith(
+        state: CourtState.available,
+        clearMatch: true,
+        clearStayingPlayer: true,
+      );
+      return;
+    }
     final court = _court(courtNumber);
     if (court.state != CourtState.waitingOpponent ||
         court.stayingGroupId == null) {
@@ -712,7 +892,11 @@ final class PlaySession {
     if (match.state != MatchState.completed) {
       throw const RuleViolation('match_not_completed');
     }
-    ScoreRules.validate(_setup.scorePreset, result);
+    ScoreRules.validate(
+      _setup.scorePreset,
+      result,
+      allowLegacySeries: !_setup.singleGame,
+    );
     _matches[matchId] = match.copyWith(result: result);
   }
 
@@ -750,16 +934,13 @@ final class PlaySession {
     }
     final duplicate = PlaySession.create(
       id: id,
-      setup: _setup.copyWith(title: title, randomSeed: randomSeed),
+      setup: _setup.copyWith(
+        title: title,
+        randomSeed: randomSeed,
+        courtCount: 1,
+        singleGame: true,
+      ),
     );
-    duplicate._courts = {
-      for (final court in courts)
-        court.number: Court(
-          number: court.number,
-          name: court.name,
-          state: CourtState.available,
-        ),
-    };
     for (final player in players) {
       duplicate.addPlayer(player.name);
     }
@@ -799,6 +980,9 @@ final class PlaySession {
     }
 
     final activeGroupPlayers = <int>{};
+    if (_setup.matchFormat == MatchFormat.singles && _groups.isNotEmpty) {
+      throw const RuleViolation('invalid_session_snapshot');
+    }
     for (final group in _groups.values) {
       if (group.id <= 0 ||
           group.firstPlayerId == group.secondPlayerId ||
@@ -823,9 +1007,12 @@ final class PlaySession {
     final expectedPlayerStates = <int, PlayerState>{};
     var maxCompletionOrder = 0;
     for (final match in _matches.values) {
+      final expectedPlayerCount = _setup.matchFormat == MatchFormat.singles
+          ? 2
+          : 4;
       if (match.id <= 0 ||
           match.players.any((playerId) => playerId <= 0) ||
-          match.players.toSet().length != 4 ||
+          match.players.toSet().length != expectedPlayerCount ||
           !match.players.every(_players.containsKey) ||
           !_courts.containsKey(match.courtNumber)) {
         throw const RuleViolation('invalid_session_snapshot');
@@ -836,13 +1023,21 @@ final class PlaySession {
             match.completedOrder! <= 0) {
           throw const RuleViolation('invalid_session_snapshot');
         }
-        ScoreRules.validate(_setup.scorePreset, match.result!);
+        ScoreRules.validate(
+          _setup.scorePreset,
+          match.result!,
+          allowLegacySeries: !_setup.singleGame,
+        );
         maxCompletionOrder = max(maxCompletionOrder, match.completedOrder!);
       } else if (match.state == MatchState.resultRecorded) {
         if (match.result == null || match.completedOrder != null) {
           throw const RuleViolation('invalid_session_snapshot');
         }
-        ScoreRules.validate(_setup.scorePreset, match.result!);
+        ScoreRules.validate(
+          _setup.scorePreset,
+          match.result!,
+          allowLegacySeries: !_setup.singleGame,
+        );
       } else if (match.result != null || match.completedOrder != null) {
         throw const RuleViolation('invalid_session_snapshot');
       }
@@ -923,7 +1118,10 @@ final class PlaySession {
         continue;
       }
       if (court.state == CourtState.waitingOpponent) {
-        if (court.matchId != null || court.stayingGroupId == null) {
+        final hasStayingUnit = _setup.matchFormat == MatchFormat.singles
+            ? court.stayingPlayerId != null && court.stayingGroupId == null
+            : court.stayingGroupId != null && court.stayingPlayerId == null;
+        if (court.matchId != null || !hasStayingUnit) {
           throw const RuleViolation('invalid_session_snapshot');
         }
         continue;
@@ -952,11 +1150,14 @@ final class PlaySession {
   }
 
   void _upgradeLegacyState() {
-    for (final player in _players.values.toList()) {
-      if (player.state == PlayerState.waiting) {
-        _players[player.id] = player.copyWith(state: PlayerState.ungrouped);
+    if (_setup.matchFormat == MatchFormat.doubles) {
+      for (final player in _players.values.toList()) {
+        if (player.state == PlayerState.waiting) {
+          _players[player.id] = player.copyWith(state: PlayerState.ungrouped);
+        }
       }
     }
+    if (_setup.matchFormat == MatchFormat.singles) return;
     if (_groups.isNotEmpty) return;
     for (final match in _matches.values.toList()) {
       if (match.state != MatchState.ready &&
@@ -969,14 +1170,14 @@ final class PlaySession {
       final first = PairingGroup(
         id: _nextGroupId++,
         firstPlayerId: match.teamA.first,
-        secondPlayerId: match.teamA.second,
+        secondPlayerId: match.teamA.second!,
         state: groupState,
         queueOrder: _takeQueueOrder(),
       );
       final second = PairingGroup(
         id: _nextGroupId++,
         firstPlayerId: match.teamB.first,
-        secondPlayerId: match.teamB.second,
+        secondPlayerId: match.teamB.second!,
         state: groupState,
         queueOrder: _takeQueueOrder(),
       );
@@ -1041,7 +1242,9 @@ final class PlaySession {
     final player = SessionPlayer(
       id: _nextPlayerId++,
       name: name,
-      state: PlayerState.ungrouped,
+      state: _setup.matchFormat == MatchFormat.singles
+          ? PlayerState.waiting
+          : PlayerState.ungrouped,
       queueOrder: _takeQueueOrder(),
     );
     _players[player.id] = player;
@@ -1051,6 +1254,148 @@ final class PlaySession {
   int _takeQueueOrder() => _nextQueueOrder++;
 
   int _seed(int offset) => _setup.randomSeed + (_pairingRound * 1009) + offset;
+
+  void _resetFormatPreparation() {
+    _groups.clear();
+    _nextGroupId = 1;
+    final ordered = players.toList()
+      ..sort((left, right) => left.queueOrder.compareTo(right.queueOrder));
+    var order = 0;
+    for (final player in ordered) {
+      if (player.state == PlayerState.resting ||
+          player.state == PlayerState.left) {
+        continue;
+      }
+      _players[player.id] = player.copyWith(
+        state: _setup.matchFormat == MatchFormat.singles
+            ? PlayerState.waiting
+            : PlayerState.ungrouped,
+        queueOrder: order++,
+      );
+    }
+    _nextQueueOrder = max(_nextQueueOrder, order);
+  }
+
+  SessionMatch _createSinglesMatch(
+    Court court,
+    SessionPlayer first,
+    SessionPlayer second,
+  ) {
+    _requirePlayerState(first, PlayerState.waiting);
+    _requirePlayerState(second, PlayerState.waiting);
+    final match = SessionMatch(
+      id: _nextMatchId++,
+      courtNumber: court.number,
+      teamA: Team.singles(first.id),
+      teamB: Team.singles(second.id),
+      state: MatchState.ready,
+      relaxed: false,
+    );
+    _matches[match.id] = match;
+    _courts[court.number] = court.copyWith(
+      state: CourtState.ready,
+      matchId: match.id,
+      clearStayingPlayer: true,
+    );
+    _players[first.id] = first.copyWith(state: PlayerState.assigned);
+    _players[second.id] = second.copyWith(state: PlayerState.assigned);
+    return match;
+  }
+
+  void _resolveSinglesWinnerStays(int matchId) {
+    final match = _match(matchId);
+    _requireResultRecorded(match);
+    final court = _court(match.courtNumber);
+    final winnerId = match.result!.winner == Side.a
+        ? match.teamA.first
+        : match.teamB.first;
+    final loserId = match.result!.winner == Side.a
+        ? match.teamB.first
+        : match.teamA.first;
+    final next = waitingPlayers.isEmpty ? null : waitingPlayers.first;
+    _completeRecordedMatch(match, RotationMode.winnerStays);
+    _enqueuePlayer(_player(loserId));
+    if (next == null) {
+      _players[winnerId] = _player(
+        winnerId,
+      ).copyWith(state: PlayerState.staying);
+      _courts[court.number] = court.copyWith(
+        state: CourtState.waitingOpponent,
+        clearMatch: true,
+        stayingPlayerId: winnerId,
+      );
+    } else {
+      _players[winnerId] = _player(
+        winnerId,
+      ).copyWith(state: PlayerState.waiting);
+      _courts[court.number] = court.copyWith(
+        state: CourtState.available,
+        clearMatch: true,
+      );
+      _createSinglesMatch(_court(court.number), _player(winnerId), next);
+    }
+  }
+
+  void _resolveSinglesAllRotate(int matchId) {
+    final match = _match(matchId);
+    _requireResultRecorded(match);
+    final court = _court(match.courtNumber);
+    final next = waitingPlayers.take(2).toList();
+    _completeRecordedMatch(match, RotationMode.allRotate);
+    for (final playerId in match.players) {
+      _enqueuePlayer(_player(playerId));
+    }
+    _courts[court.number] = court.copyWith(
+      state: CourtState.available,
+      clearMatch: true,
+    );
+    if (next.length == 2) {
+      _createSinglesMatch(_court(court.number), next[0], next[1]);
+    }
+  }
+
+  void _fillSinglesCourt(int courtNumber, int? selectedPlayerId) {
+    final court = _court(courtNumber);
+    if (court.state != CourtState.waitingOpponent ||
+        court.stayingPlayerId == null) {
+      throw const RuleViolation('court_not_waiting_opponent');
+    }
+    final next = selectedPlayerId == null
+        ? (waitingPlayers.isEmpty ? null : waitingPlayers.first)
+        : _player(selectedPlayerId);
+    if (next == null) throw const RuleViolation('waiting_player_required');
+    _requirePlayerState(next, PlayerState.waiting);
+    final staying = _player(court.stayingPlayerId!);
+    _players[staying.id] = staying.copyWith(state: PlayerState.waiting);
+    _courts[court.number] = court.copyWith(
+      state: CourtState.available,
+      clearStayingPlayer: true,
+    );
+    _createSinglesMatch(_court(court.number), _player(staying.id), next);
+  }
+
+  void _enqueuePlayer(SessionPlayer player) {
+    _players[player.id] = player.copyWith(
+      state: PlayerState.waiting,
+      queueOrder: _takeQueueOrder(),
+    );
+  }
+
+  void _returnPlayersToFront(Iterable<int> playerIds) {
+    final returning = playerIds.map(_player).toList();
+    final returningIds = returning.map((player) => player.id).toSet();
+    final waiting = waitingPlayers
+        .where((player) => !returningIds.contains(player.id))
+        .toList();
+    var order = 0;
+    for (final player in [...returning, ...waiting]) {
+      _players[player.id] = player.copyWith(
+        state: PlayerState.waiting,
+        queueOrder: order++,
+      );
+    }
+    _nextQueueOrder = max(_nextQueueOrder, order);
+  }
 
   SessionMatch _createMatch(
     Court court,
@@ -1198,8 +1543,10 @@ final class PlaySession {
   }
 
   static void _countPartners(Map<int, _MutableStats> stats, Team team) {
-    _increment(stats[team.first]?.partners, team.second);
-    _increment(stats[team.second]?.partners, team.first);
+    final second = team.second;
+    if (second == null) return;
+    _increment(stats[team.first]?.partners, second);
+    _increment(stats[second]?.partners, team.first);
   }
 
   static void _increment(Map<int, int>? values, int key) {

@@ -4,6 +4,8 @@ enum PairingPolicy { random, fairRotation }
 
 enum ScorePreset { quick11, standard21 }
 
+enum MatchFormat { singles, doubles }
+
 enum RotationMode { winnerStays, allRotate }
 
 enum SessionStatus { draft, active, completed, deleted }
@@ -59,6 +61,8 @@ final class SessionSetup {
   const SessionSetup({
     required this.title,
     required this.courtCount,
+    this.matchFormat = MatchFormat.doubles,
+    this.singleGame = true,
     this.pairingPolicy = PairingPolicy.fairRotation,
     required this.scorePreset,
     this.avoidRecentPartner = true,
@@ -68,6 +72,8 @@ final class SessionSetup {
 
   final String title;
   final int courtCount;
+  final MatchFormat matchFormat;
+  final bool singleGame;
   final PairingPolicy pairingPolicy;
   final ScorePreset scorePreset;
   final bool avoidRecentPartner;
@@ -77,6 +83,8 @@ final class SessionSetup {
   SessionSetup copyWith({
     String? title,
     int? courtCount,
+    MatchFormat? matchFormat,
+    bool? singleGame,
     PairingPolicy? pairingPolicy,
     ScorePreset? scorePreset,
     bool? avoidRecentPartner,
@@ -86,6 +94,8 @@ final class SessionSetup {
     return SessionSetup(
       title: title ?? this.title,
       courtCount: courtCount ?? this.courtCount,
+      matchFormat: matchFormat ?? this.matchFormat,
+      singleGame: singleGame ?? this.singleGame,
       pairingPolicy: pairingPolicy ?? this.pairingPolicy,
       scorePreset: scorePreset ?? this.scorePreset,
       avoidRecentPartner: avoidRecentPartner ?? this.avoidRecentPartner,
@@ -125,6 +135,7 @@ final class Court {
     required this.state,
     this.matchId,
     this.stayingGroupId,
+    this.stayingPlayerId,
   });
 
   final int number;
@@ -132,14 +143,17 @@ final class Court {
   final CourtState state;
   final int? matchId;
   final int? stayingGroupId;
+  final int? stayingPlayerId;
 
   Court copyWith({
     String? name,
     CourtState? state,
     int? matchId,
     int? stayingGroupId,
+    int? stayingPlayerId,
     bool clearMatch = false,
     bool clearStayingGroup = false,
+    bool clearStayingPlayer = false,
   }) {
     return Court(
       number: number,
@@ -149,6 +163,9 @@ final class Court {
       stayingGroupId: clearStayingGroup
           ? null
           : stayingGroupId ?? this.stayingGroupId,
+      stayingPlayerId: clearStayingPlayer
+          ? null
+          : stayingPlayerId ?? this.stayingPlayerId,
     );
   }
 }
@@ -192,10 +209,12 @@ final class PairingGroup {
 final class Team {
   const Team(this.first, this.second);
 
-  final int first;
-  final int second;
+  const Team.singles(this.first) : second = null;
 
-  List<int> get players => List.unmodifiable([first, second]);
+  final int first;
+  final int? second;
+
+  List<int> get players => List.unmodifiable([first, ?second]);
 
   bool contains(int playerId) => first == playerId || second == playerId;
 
@@ -275,7 +294,7 @@ final class SessionMatch {
   final int? completedOrder;
 
   List<int> get players =>
-      List.unmodifiable([teamA.first, teamA.second, teamB.first, teamB.second]);
+      List.unmodifiable([...teamA.players, ...teamB.players]);
 
   bool contains(int playerId) =>
       teamA.contains(playerId) || teamB.contains(playerId);

@@ -3,13 +3,17 @@ import 'models.dart';
 final class ScoreRules {
   const ScoreRules._();
 
-  static void validate(ScorePreset preset, MatchResult result) {
+  static void validate(
+    ScorePreset preset,
+    MatchResult result, {
+    bool allowLegacySeries = false,
+  }) {
     if (result.mode == ResultMode.winnerOnly) return;
     switch (preset) {
       case ScorePreset.quick11:
         _quick11(result);
       case ScorePreset.standard21:
-        _standard21(result);
+        _standard21(result, allowLegacySeries: allowLegacySeries);
     }
   }
 
@@ -25,8 +29,20 @@ final class ScoreRules {
     }
   }
 
-  static void _standard21(MatchResult result) {
+  static void _standard21(
+    MatchResult result, {
+    required bool allowLegacySeries,
+  }) {
     final games = result.games;
+    if (!allowLegacySeries) {
+      if (games.length != 1) {
+        throw const RuleViolation('standard_21_requires_one_game');
+      }
+      if (!_validStandardGame(games.single)) {
+        throw const RuleViolation('invalid_standard_21_score');
+      }
+      return;
+    }
     if (games.length < 2 || games.length > 3) {
       throw const RuleViolation('standard_21_requires_two_or_three_games');
     }

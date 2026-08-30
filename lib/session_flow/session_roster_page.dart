@@ -100,39 +100,6 @@ class _SessionRosterPageState extends State<SessionRosterPage> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<void> _addCourt() async {
-    final name = await showPlayerNameDialog(
-      context,
-      title: '添加场地',
-      confirmLabel: '添加',
-      fieldLabel: '场地名称',
-    );
-    if (!mounted || name == null) return;
-    await _update((session) => session.addCourt(name));
-  }
-
-  Future<void> _removeCourt(Court court) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('移除场地？'),
-        content: Text('将空闲场地“${court.name}”从本场移除。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('确认移除'),
-          ),
-        ],
-      ),
-    );
-    if (!mounted || confirmed != true) return;
-    await _update((session) => session.removeCourt(court.number));
-  }
-
   Future<void> _randomGroups() async {
     await _update((session) => session.generateRandomGroups());
   }
@@ -238,6 +205,27 @@ class _SessionRosterPageState extends State<SessionRosterPage> {
       ),
     );
     if (!mounted || setup == null) return;
+    if (setup.matchFormat != session.setup.matchFormat &&
+        session.players.isNotEmpty) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('切换比赛形式？'),
+          content: const Text('现有球友会保留，但双人组和候场准备会按新形式重新整理。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('确认切换'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || confirmed != true) return;
+    }
     await _update((value) => value.updateSetup(setup));
   }
 
@@ -261,7 +249,9 @@ class _SessionRosterPageState extends State<SessionRosterPage> {
           : _RosterBottomAction(
               session: session,
               busy: _busy,
-              onPressed: _startOrEnter,
+              onAddPlayer: _addPlayer,
+              onManualGroup: _manualGroup,
+              onStart: _startOrEnter,
             ),
       body: SafeArea(
         top: false,
@@ -276,8 +266,6 @@ class _SessionRosterPageState extends State<SessionRosterPage> {
             busy: _busy,
             onAdd: _addPlayer,
             onBatchAdd: _batchAdd,
-            onAddCourt: _addCourt,
-            onRemoveCourt: _removeCourt,
             onRandomGroups: _randomGroups,
             onManualGroup: _manualGroup,
             onReplaceGroupPlayer: _replaceGroupPlayer,
@@ -298,8 +286,6 @@ class _RosterContent extends StatelessWidget {
     required this.busy,
     required this.onAdd,
     required this.onBatchAdd,
-    required this.onAddCourt,
-    required this.onRemoveCourt,
     required this.onRandomGroups,
     required this.onManualGroup,
     required this.onReplaceGroupPlayer,
@@ -312,8 +298,6 @@ class _RosterContent extends StatelessWidget {
   final bool busy;
   final VoidCallback onAdd;
   final VoidCallback onBatchAdd;
-  final VoidCallback onAddCourt;
-  final ValueChanged<Court> onRemoveCourt;
   final VoidCallback onRandomGroups;
   final VoidCallback onManualGroup;
   final ValueChanged<PairingGroup> onReplaceGroupPlayer;
@@ -332,17 +316,16 @@ class _RosterContent extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  '准备本场玩家',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
+                Text('准备开局', style: Theme.of(context).textTheme.headlineMedium),
                 const SizedBox(height: 6),
                 Text(
-                  session.players.length < 4
-                      ? '至少加入 4 名玩家后才能启动球局。'
-                      : '名单已满足开局人数，还可以继续添加或调整。',
+                  session.setup.matchFormat == MatchFormat.singles
+                      ? '加入至少 2 名球友后，就可以按个人候场顺序开打。'
+                      : '加入球友并组成至少 2 个固定搭档后，就可以开打。',
                   style: const TextStyle(color: RallyPairColors.textSecondary),
                 ),
+                const SizedBox(height: 18),
+                _ReadinessCard(session: session),
                 const SizedBox(height: 20),
                 Row(
                   children: [
@@ -365,104 +348,66 @@ class _RosterContent extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 24),
-                Row(
-                  children: [
-                    Text('场地', style: Theme.of(context).textTheme.titleLarge),
-                    const Spacer(),
-                    TextButton(
-                      key: const ValueKey('add-court'),
-                      onPressed: busy ? null : onAddCourt,
-                      child: const Text('添加场地'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                for (final court in session.courts)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
+                if (session.setup.matchFormat == MatchFormat.doubles) ...[
+                  Text('双人组准备', style: Theme.of(context).textTheme.titleLarge),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: FilledButton(
+                          key: const ValueKey('random-groups'),
+                          onPressed: busy ? null : onRandomGroups,
+                          child: const Text('随机组队'),
+                        ),
                       ),
-                      decoration: BoxDecoration(
-                        color: RallyPairColors.surface,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: RallyPairColors.outline),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: OutlinedButton(
+                          key: const ValueKey('manual-group'),
+                          onPressed: busy ? null : onManualGroup,
+                          child: const Text('手动组队'),
+                        ),
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  for (final group in session.groups.where(
+                    (group) => group.state == GroupState.waiting,
+                  ))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
                       child: Row(
                         children: [
                           Expanded(
                             child: Text(
-                              court.name,
-                              style: Theme.of(context).textTheme.titleMedium,
+                              '${session.players.firstWhere((p) => p.id == group.firstPlayerId).name} · ${session.players.firstWhere((p) => p.id == group.secondPlayerId).name}',
                             ),
                           ),
                           TextButton(
-                            onPressed: busy ? null : () => onRemoveCourt(court),
-                            child: const Text('移除'),
+                            onPressed:
+                                busy ||
+                                    !session.players.any(
+                                      (player) =>
+                                          player.state == PlayerState.ungrouped,
+                                    )
+                                ? null
+                                : () => onReplaceGroupPlayer(group),
+                            child: const Text('换人'),
+                          ),
+                          TextButton(
+                            onPressed: busy
+                                ? null
+                                : () => onDissolveGroup(group),
+                            child: const Text('解散'),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                const SizedBox(height: 16),
-                Text('双人组', style: Theme.of(context).textTheme.titleLarge),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton(
-                        key: const ValueKey('random-groups'),
-                        onPressed: busy ? null : onRandomGroups,
-                        child: const Text('随机组队'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton(
-                        key: const ValueKey('manual-group'),
-                        onPressed: busy ? null : onManualGroup,
-                        child: const Text('手动组队'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                for (final group in session.groups.where(
-                  (group) => group.state == GroupState.waiting,
-                ))
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '${session.players.firstWhere((p) => p.id == group.firstPlayerId).name} · ${session.players.firstWhere((p) => p.id == group.secondPlayerId).name}',
-                          ),
-                        ),
-                        TextButton(
-                          onPressed:
-                              busy ||
-                                  !session.players.any(
-                                    (player) =>
-                                        player.state == PlayerState.ungrouped,
-                                  )
-                              ? null
-                              : () => onReplaceGroupPlayer(group),
-                          child: const Text('换人'),
-                        ),
-                        TextButton(
-                          onPressed: busy ? null : () => onDissolveGroup(group),
-                          child: const Text('解散'),
-                        ),
-                      ],
-                    ),
-                  ),
+                ],
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    Text('本场名单', style: Theme.of(context).textTheme.titleLarge),
+                    Text('本场球友', style: Theme.of(context).textTheme.titleLarge),
                     const Spacer(),
                     Text(
                       '${session.players.length} 人',
@@ -494,6 +439,128 @@ class _RosterContent extends StatelessWidget {
                   ],
               ],
             ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReadinessCard extends StatelessWidget {
+  const _ReadinessCard({required this.session});
+
+  final PlaySession session;
+
+  @override
+  Widget build(BuildContext context) {
+    final singles = session.setup.matchFormat == MatchFormat.singles;
+    final items = singles
+        ? [
+            (
+              '单打球友',
+              '${session.waitingPlayers.length} 人候场，至少需要 2 人',
+              session.waitingPlayers.length >= 2,
+            ),
+            ('场地', '固定使用 1 块场地', session.courts.length == 1),
+          ]
+        : [
+            (
+              '球友',
+              '${session.players.length} 人，至少需要 4 人',
+              session.players.length >= 4,
+            ),
+            (
+              '双人组',
+              '${session.waitingGroups.length} 组，至少需要 2 组',
+              session.waitingGroups.length >= 2,
+            ),
+            ('场地', '固定使用 1 块场地', session.courts.length == 1),
+          ];
+    final completed = items.where((item) => item.$3).length;
+    return Container(
+      key: const ValueKey('session-readiness'),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: RallyPairColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: RallyPairColors.outline),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Text('开局准备', style: Theme.of(context).textTheme.titleMedium),
+              const Spacer(),
+              Text(
+                '$completed / ${items.length}',
+                style: const TextStyle(
+                  color: RallyPairColors.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          for (var index = 0; index < items.length; index++) ...[
+            _ReadinessRow(
+              label: items[index].$1,
+              detail: items[index].$2,
+              complete: items[index].$3,
+            ),
+            if (index != items.length - 1) const SizedBox(height: 10),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ReadinessRow extends StatelessWidget {
+  const _ReadinessRow({
+    required this.label,
+    required this.detail,
+    required this.complete,
+  });
+
+  final String label;
+  final String detail;
+  final bool complete;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = complete
+        ? RallyPairColors.court
+        : RallyPairColors.textSecondary;
+    return Row(
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: color.withAlpha(24),
+            shape: BoxShape.circle,
+          ),
+          child: Text(
+            complete ? '✓' : '·',
+            style: TextStyle(color: color, fontWeight: FontWeight.w900),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+              Text(
+                detail,
+                style: const TextStyle(
+                  color: RallyPairColors.textSecondary,
+                  fontSize: 13,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -625,19 +692,38 @@ class _RosterBottomAction extends StatelessWidget {
   const _RosterBottomAction({
     required this.session,
     required this.busy,
-    required this.onPressed,
+    required this.onAddPlayer,
+    required this.onManualGroup,
+    required this.onStart,
   });
 
   final PlaySession session;
   final bool busy;
-  final VoidCallback onPressed;
+  final VoidCallback onAddPlayer;
+  final VoidCallback onManualGroup;
+  final VoidCallback onStart;
 
   @override
   Widget build(BuildContext context) {
+    final singles = session.setup.matchFormat == MatchFormat.singles;
+    final requiredPlayers = singles ? 2 : 4;
+    final missingPlayers = requiredPlayers - session.players.length;
     final missingGroups = 2 - session.waitingGroups.length;
     final active = session.status == SessionStatus.active;
-    final enabled =
-        !busy && (active || (missingGroups <= 0 && session.courts.isNotEmpty));
+    final ungrouped = session.players
+        .where((player) => player.state == PlayerState.ungrouped)
+        .length;
+    final (label, action) = active
+        ? ('进入现场球局', onStart)
+        : missingPlayers > 0
+        ? ('添加球友，还差 $missingPlayers 人', onAddPlayer)
+        : singles
+        ? ('启动单打球局', onStart)
+        : missingGroups > 0 && ungrouped < 2
+        ? ('再添加 1 名球友完成组队', onAddPlayer)
+        : missingGroups > 0
+        ? ('手动组成下一组，还差 $missingGroups 组', onManualGroup)
+        : ('启动双打球局', onStart);
     return SafeArea(
       top: false,
       child: Container(
@@ -647,16 +733,9 @@ class _RosterBottomAction extends StatelessWidget {
           border: Border(top: BorderSide(color: RallyPairColors.outline)),
         ),
         child: FilledButton(
-          onPressed: enabled ? onPressed : null,
-          child: Text(
-            busy
-                ? '正在保存…'
-                : active
-                ? '进入现场球局'
-                : missingGroups > 0
-                ? '还需 $missingGroups 个双人组'
-                : '启动球局',
-          ),
+          key: const ValueKey('roster-next-action'),
+          onPressed: busy ? null : action,
+          child: Text(busy ? '正在保存…' : label),
         ),
       ),
     );

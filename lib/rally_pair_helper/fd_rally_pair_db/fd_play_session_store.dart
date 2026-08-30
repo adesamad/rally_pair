@@ -73,6 +73,10 @@ final class FdPlaySessionStore implements PlaySessionStore {
             courtCount: record.courtCount,
             pairingPolicy: _enum(PairingPolicy.values, record.pairingPolicy),
             scorePreset: _enum(ScorePreset.values, record.scorePreset),
+            matchFormat: record.matchFormat == null
+                ? MatchFormat.doubles
+                : _enum(MatchFormat.values, record.matchFormat!),
+            singleGame: record.singleGame ?? false,
             avoidRecentPartner: record.avoidRecentPartner,
             randomSeed: record.randomSeed,
             defaultRotationMode: _enum(
@@ -108,6 +112,7 @@ final class FdPlaySessionStore implements PlaySessionStore {
                 state: _enum(CourtState.values, court.state),
                 matchId: court.matchId,
                 stayingGroupId: court.stayingGroupId,
+                stayingPlayerId: court.stayingPlayerId,
               ),
           ],
           matches: [
@@ -115,8 +120,12 @@ final class FdPlaySessionStore implements PlaySessionStore {
               SessionMatch(
                 id: match.id,
                 courtNumber: match.courtNumber,
-                teamA: Team(match.teamAFirst, match.teamASecond),
-                teamB: Team(match.teamBFirst, match.teamBSecond),
+                teamA: match.teamASecond == 0
+                    ? Team.singles(match.teamAFirst)
+                    : Team(match.teamAFirst, match.teamASecond),
+                teamB: match.teamBSecond == 0
+                    ? Team.singles(match.teamBFirst)
+                    : Team(match.teamBFirst, match.teamBSecond),
                 state: _enum(MatchState.values, match.state),
                 relaxed: match.relaxed,
                 groupAId: match.groupAId,
@@ -218,6 +227,8 @@ final class FdPlaySessionStore implements PlaySessionStore {
             courtCount: snapshot.setup.courtCount,
             pairingPolicy: snapshot.setup.pairingPolicy.name,
             scorePreset: snapshot.setup.scorePreset.name,
+            matchFormat: Value(snapshot.setup.matchFormat.name),
+            singleGame: Value(snapshot.setup.singleGame),
             avoidRecentPartner: snapshot.setup.avoidRecentPartner,
             randomSeed: snapshot.setup.randomSeed,
             status: snapshot.status.name,
@@ -317,6 +328,7 @@ final class FdPlaySessionStore implements PlaySessionStore {
             matchId: Value(court.matchId),
             name: Value(court.name),
             stayingGroupId: Value(court.stayingGroupId),
+            stayingPlayerId: Value(court.stayingPlayerId),
           ),
       ]);
     });
@@ -332,9 +344,9 @@ final class FdPlaySessionStore implements PlaySessionStore {
             id: match.id,
             courtNumber: match.courtNumber,
             teamAFirst: match.teamA.first,
-            teamASecond: match.teamA.second,
+            teamASecond: match.teamA.second ?? 0,
             teamBFirst: match.teamB.first,
-            teamBSecond: match.teamB.second,
+            teamBSecond: match.teamB.second ?? 0,
             state: match.state.name,
             relaxed: match.relaxed,
             resultMode: Value(match.result?.mode.name),

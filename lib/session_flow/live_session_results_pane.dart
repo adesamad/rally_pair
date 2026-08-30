@@ -69,7 +69,7 @@ class _ResultCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            '${winner == Side.a ? 'A' : 'B'} 组获胜',
+            '${winner == Side.a ? 'A' : 'B'} 方获胜',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 4),
@@ -120,14 +120,14 @@ class _WinnerDialog extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _WinnerChoice(
-            label: 'A 组获胜',
+            label: 'A 方获胜',
             names: _teamName(match.teamA, names),
             onPressed: () =>
                 Navigator.of(context).pop(MatchResult.winnerOnly(Side.a)),
           ),
           const SizedBox(height: 10),
           _WinnerChoice(
-            label: 'B 组获胜',
+            label: 'B 方获胜',
             names: _teamName(match.teamB, names),
             onPressed: () =>
                 Navigator.of(context).pop(MatchResult.winnerOnly(Side.b)),
@@ -143,7 +143,7 @@ class _WinnerDialog extends StatelessWidget {
                 Navigator.of(context).pop(result);
               }
             },
-            child: const Text('录入各局比分'),
+            child: const Text('录入本局比分'),
           ),
         ],
       ),
@@ -174,9 +174,8 @@ class _GameScoreDialogState extends State<_GameScoreDialog> {
   @override
   void initState() {
     super.initState();
-    final count = widget.preset == ScorePreset.quick11 ? 1 : 3;
-    _a = List.generate(count, (_) => TextEditingController());
-    _b = List.generate(count, (_) => TextEditingController());
+    _a = [TextEditingController()];
+    _b = [TextEditingController()];
   }
 
   @override
@@ -192,9 +191,8 @@ class _GameScoreDialogState extends State<_GameScoreDialog> {
     for (var index = 0; index < _a.length; index++) {
       final a = int.tryParse(_a[index].text.trim());
       final b = int.tryParse(_b[index].text.trim());
-      if (a == null && b == null && index == 2) continue;
       if (a == null || b == null) {
-        setState(() => _error = '请把每一局双方比分填写完整。');
+        setState(() => _error = '请把双方比分填写完整。');
         return;
       }
       games.add(GameScore(a, b));
@@ -209,7 +207,9 @@ class _GameScoreDialogState extends State<_GameScoreDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('录入各局比分'),
+      title: Text(
+        widget.preset == ScorePreset.quick11 ? '录入 11 分比分' : '录入 21 分比分',
+      ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -220,7 +220,7 @@ class _GameScoreDialogState extends State<_GameScoreDialog> {
                   child: TextField(
                     controller: _a[index],
                     keyboardType: TextInputType.number,
-                    decoration: InputDecoration(labelText: '第${index + 1}局 A'),
+                    decoration: const InputDecoration(labelText: 'A 方'),
                   ),
                 ),
                 const Padding(
@@ -231,7 +231,7 @@ class _GameScoreDialogState extends State<_GameScoreDialog> {
                   child: TextField(
                     controller: _b[index],
                     keyboardType: TextInputType.number,
-                    decoration: InputDecoration(labelText: '第${index + 1}局 B'),
+                    decoration: const InputDecoration(labelText: 'B 方'),
                   ),
                 ),
               ],

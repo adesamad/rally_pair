@@ -25,14 +25,24 @@ class _WaitingPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final singles = session.setup.matchFormat == MatchFormat.singles;
     final groups = <(String, PlayerState, List<SessionPlayer>)>[
-      (
-        '未成组',
-        PlayerState.ungrouped,
-        session.players
-            .where((player) => player.state == PlayerState.ungrouped)
-            .toList(),
-      ),
+      if (singles)
+        (
+          '候场',
+          PlayerState.waiting,
+          session.players
+              .where((player) => player.state == PlayerState.waiting)
+              .toList(),
+        ),
+      if (!singles)
+        (
+          '未成组',
+          PlayerState.ungrouped,
+          session.players
+              .where((player) => player.state == PlayerState.ungrouped)
+              .toList(),
+        ),
       (
         '休息',
         PlayerState.resting,
@@ -65,9 +75,11 @@ class _WaitingPane extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
       children: [
-        const _SectionIntro(
+        _SectionIntro(
           title: '玩家状态',
-          description: '现场加入的新玩家先进入未成组区，可继续随机或手动组队。',
+          description: singles
+              ? '现场加入的新玩家会直接进入个人候场顺序。'
+              : '现场加入的新玩家先进入未成组区，可继续随机或手动组队。',
         ),
         const SizedBox(height: 18),
         Row(
@@ -135,6 +147,7 @@ class _LivePlayerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final editable =
+        player.state == PlayerState.waiting ||
         player.state == PlayerState.ungrouped ||
         player.state == PlayerState.resting ||
         player.state == PlayerState.left;
@@ -168,7 +181,8 @@ class _LivePlayerCard extends StatelessWidget {
                     onPressed: busy ? null : () => onRename(player),
                     child: const Text('改名'),
                   ),
-                  if (player.state == PlayerState.ungrouped)
+                  if (player.state == PlayerState.ungrouped ||
+                      player.state == PlayerState.waiting)
                     TextButton(
                       onPressed: busy ? null : () => onRest(player.id),
                       child: const Text('休息'),
@@ -180,6 +194,7 @@ class _LivePlayerCard extends StatelessWidget {
                       child: const Text('回到候场'),
                     ),
                   if (player.state == PlayerState.ungrouped ||
+                      player.state == PlayerState.waiting ||
                       player.state == PlayerState.resting)
                     TextButton(
                       onPressed: busy ? null : () => onLeave(player.id),
@@ -189,6 +204,7 @@ class _LivePlayerCard extends StatelessWidget {
                       child: const Text('离场'),
                     ),
                   if (player.state == PlayerState.ungrouped ||
+                      player.state == PlayerState.waiting ||
                       player.state == PlayerState.resting ||
                       player.state == PlayerState.left)
                     TextButton(

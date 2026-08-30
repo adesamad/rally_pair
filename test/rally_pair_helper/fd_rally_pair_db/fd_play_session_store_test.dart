@@ -48,6 +48,36 @@ void main() {
     expect((await store.load(session.id))!.matches, hasLength(2));
   });
 
+  test('round-trip 保留单打形式、个人候场和留场球友', () async {
+    final session = PlaySession.create(
+      id: 30,
+      setup: const SessionSetup(
+        title: '单打持久化',
+        courtCount: 1,
+        matchFormat: MatchFormat.singles,
+        scorePreset: ScorePreset.standard21,
+        randomSeed: 30,
+      ),
+    );
+    for (var index = 1; index <= 2; index++) {
+      session.addPlayer('单打$index');
+    }
+    session.start();
+    final match = session.assignNext(1);
+    session.startMatch(match.id);
+    session.finishMatch(match.id, MatchResult.winnerOnly(Side.a));
+    session.resolveWinnerStays(match.id);
+
+    await store.save(session);
+    final restored = (await store.load(session.id))!;
+
+    expect(restored.setup.matchFormat, MatchFormat.singles);
+    expect(restored.setup.singleGame, isTrue);
+    expect(restored.groups, isEmpty);
+    expect(restored.courts.single.stayingPlayerId, 1);
+    expect(restored.matches.single.teamA.second, isNull);
+  });
+
   test('delete 删除聚合全部 owned rows', () async {
     final session = _session();
     await store.save(session);

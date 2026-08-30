@@ -1,7 +1,11 @@
 # 双人组、场地与上下场轮转运行模型决策
 
-document_state: accepted
+document_state: superseded_in_part
 decision_date: 2026-08-27
+
+> 2026-08-30 起，多场地、仅双打与多局比分部分由
+> [单场地、单双打与一局比分运行模型决策](single-court-match-format-runtime-direction.md)
+> 替代；本文件仅继续约束 doubles 固定组与组轮转语义。
 
 ## Decision
 

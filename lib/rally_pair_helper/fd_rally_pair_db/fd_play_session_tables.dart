@@ -6,6 +6,8 @@ class PlaySessionRecords extends Table {
   IntColumn get courtCount => integer()();
   TextColumn get pairingPolicy => text()();
   TextColumn get scorePreset => text()();
+  TextColumn get matchFormat => text().nullable()();
+  BoolColumn get singleGame => boolean().nullable()();
   BoolColumn get avoidRecentPartner => boolean()();
   IntColumn get randomSeed => integer()();
   TextColumn get status => text()();
@@ -41,6 +43,7 @@ class SessionCourtRecords extends Table {
   IntColumn get matchId => integer().nullable()();
   TextColumn get name => text().withDefault(const Constant(''))();
   IntColumn get stayingGroupId => integer().nullable()();
+  IntColumn get stayingPlayerId => integer().nullable()();
 
   @override
   Set<Column<Object>> get primaryKey => {sessionId, number};

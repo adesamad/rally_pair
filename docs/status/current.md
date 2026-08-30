@@ -6,6 +6,7 @@ doc_profile: docs-keeper
 
 - [羽搭 / RallyPair 产品方向基线](../knowledge/product/badminton-session-organizer.md)
 - [双人组、场地与上下场轮转运行模型决策](../decisions/group-court-rotation-runtime-direction.md)
+- [单场地、单双打与一局比分运行模型决策](../decisions/single-court-match-format-runtime-direction.md)
 - [图标库视觉方向决策](../decisions/icon-library-visual-direction.md)
 - [第一批语义图标 HTML 图标墙](../work/icon_library/rally-pair-icon-batch-01.html)
 - [图标与配色 HTML 风格板](../work/icon_library/rally-pair-icon-palette-preview.html)
@@ -16,6 +17,7 @@ doc_profile: docs-keeper
 | work | state | read first | next |
 | --- | --- | --- | --- |
 | product_logic_realignment | done | docs/work/product_logic_realignment/runtime-realignment-plan.md、docs/work/product_logic_realignment/runtime-realignment-execution-spec.md | 在真实设备复核具象场地、长名单与轮转操作手感；后续功能沿用当前运行模型 |
+| single_court_formats | done | docs/work/single_court_formats/requirement-logic-impact.md、docs/decisions/single-court-match-format-runtime-direction.md | 在真实设备走查单打/双打连续轮转与比分录入手感 |
 | framework_migration | done | docs/work/framework_migration/code-move-constraint-report.md | 迁移框架保持独立模块；真实 App 入口由后续业务实现负责 |
 | icon_library | doing | docs/work/icon_library/rally-pair-icon-batch-01.html | 审阅第一批 12 个 SVG 图标，淘汰或修订 24px 下识别不足的图案 |
 
@@ -25,6 +27,7 @@ doc_profile: docs-keeper
 | --- | --- | --- |
 | product | docs/knowledge/product/badminton-session-organizer.md | accepted |
 | runtime_model | docs/decisions/group-court-rotation-runtime-direction.md | accepted |
+| match_format_model | docs/decisions/single-court-match-format-runtime-direction.md | accepted |
 | icon_design | docs/decisions/icon-library-visual-direction.md | accepted |
 
 ## Archived Releases
@@ -32,6 +35,9 @@ doc_profile: docs-keeper
 当前没有已归档版本。
 
 ## Recent Changes
+
+- 2026-08-30：完成单场地、单双打与一局比分实现：新建和复制固定一块场地，单打采用个人候场，双打保留固定组，schema v5 非破坏兼容旧多场地/旧多局数据；Flutter analyze 与 50 项 tests 全部通过。
+- 2026-08-30：确认 V1 收敛为单场地；新建时选择单打或双打；11 分和 21 分都只记录一局；旧多场地与旧多局数据非破坏兼容。
 
 - 2026-08-27：完成 P1–P7 运行模型替换：固定双人组、组队列、具名场地、具象 Court UI、比分记录、胜方留场/两组下场、历史修正与球局收尾均已接入，schema v3→v4 非破坏迁移和全量 Flutter tests 通过。
 - 2026-08-27：生成运行模型替换 Plan Spec 与 Execution Spec，将 31 个 runtime action 拆为 7 个可见 vertical slice，并冻结非破坏 schema v4 兼容策略。

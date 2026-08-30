@@ -14,7 +14,7 @@ class SessionSetupPage extends StatefulWidget {
 
 class _SessionSetupPageState extends State<SessionSetupPage> {
   final _title = TextEditingController();
-  var _courtCount = 0;
+  var _matchFormat = MatchFormat.doubles;
   var _scorePreset = ScorePreset.standard21;
   var _rotationMode = RotationMode.winnerStays;
   String? _titleError;
@@ -25,7 +25,7 @@ class _SessionSetupPageState extends State<SessionSetupPage> {
     final setup = widget.initialSetup;
     if (setup != null) {
       _title.text = setup.title;
-      _courtCount = setup.courtCount;
+      _matchFormat = setup.matchFormat;
       _scorePreset = setup.scorePreset;
       _rotationMode = setup.defaultRotationMode;
     }
@@ -46,7 +46,9 @@ class _SessionSetupPageState extends State<SessionSetupPage> {
     Navigator.of(context).pop(
       SessionSetup(
         title: title,
-        courtCount: _courtCount,
+        courtCount: 1,
+        matchFormat: _matchFormat,
+        singleGame: true,
         scorePreset: _scorePreset,
         randomSeed:
             widget.initialSetup?.randomSeed ??
@@ -118,13 +120,29 @@ class _SessionSetupPageState extends State<SessionSetupPage> {
                   ),
                   const SizedBox(height: 20),
                   _SetupSection(
-                    title: '场地数量',
-                    child: _CourtCountField(
-                      value: _courtCount,
-                      onChanged: (value) {
-                        setState(() => _courtCount = value);
+                    title: '比赛形式',
+                    child: SegmentedButton<MatchFormat>(
+                      showSelectedIcon: false,
+                      segments: const [
+                        ButtonSegment(
+                          value: MatchFormat.singles,
+                          label: Text('单打 · 2 人'),
+                        ),
+                        ButtonSegment(
+                          value: MatchFormat.doubles,
+                          label: Text('双打 · 4 人'),
+                        ),
+                      ],
+                      selected: {_matchFormat},
+                      onSelectionChanged: (selection) {
+                        setState(() => _matchFormat = selection.single);
                       },
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '每个球局固定使用 1 块场地；单打按个人候场，双打按固定搭档候场。',
+                    style: TextStyle(color: RallyPairColors.textSecondary),
                   ),
                   const SizedBox(height: 16),
                   _SetupSection(
@@ -203,68 +221,6 @@ class _SetupSection extends StatelessWidget {
           ],
           child,
         ],
-      ),
-    );
-  }
-}
-
-class _CourtCountField extends StatelessWidget {
-  const _CourtCountField({required this.value, required this.onChanged});
-
-  final int value;
-  final ValueChanged<int> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            '$value 块场地',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-        ),
-        _CountButton(
-          label: '−',
-          semanticLabel: '减少场地',
-          onPressed: value > 0 ? () => onChanged(value - 1) : null,
-        ),
-        const SizedBox(width: 10),
-        _CountButton(
-          label: '+',
-          semanticLabel: '增加场地',
-          onPressed: value < 8 ? () => onChanged(value + 1) : null,
-        ),
-      ],
-    );
-  }
-}
-
-class _CountButton extends StatelessWidget {
-  const _CountButton({
-    required this.label,
-    required this.semanticLabel,
-    required this.onPressed,
-  });
-
-  final String label;
-  final String semanticLabel;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: semanticLabel,
-      child: SizedBox.square(
-        dimension: 48,
-        child: OutlinedButton(
-          onPressed: onPressed,
-          style: OutlinedButton.styleFrom(padding: EdgeInsets.zero),
-          child: ExcludeSemantics(
-            child: Text(label, style: const TextStyle(fontSize: 24)),
-          ),
-        ),
       ),
     );
   }
