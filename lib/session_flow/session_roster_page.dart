@@ -185,7 +185,7 @@ class _SessionRosterPageState extends State<SessionRosterPage> {
     final session = _session;
     if (session == null) return;
     if (session.status == SessionStatus.draft) {
-      final succeeded = await _update((value) => value.start());
+      final succeeded = await _update((value) => value.startFirstMatch());
       if (!mounted || !succeeded) return;
     }
     await Navigator.of(context).pushReplacement<void, void>(
@@ -356,7 +356,18 @@ class _RosterContent extends StatelessWidget {
                       Expanded(
                         child: FilledButton(
                           key: const ValueKey('random-groups'),
-                          onPressed: busy ? null : onRandomGroups,
+                          onPressed:
+                              busy ||
+                                  session.players
+                                          .where(
+                                            (player) =>
+                                                player.state ==
+                                                PlayerState.ungrouped,
+                                          )
+                                          .length <
+                                      2
+                              ? null
+                              : onRandomGroups,
                           child: const Text('随机组队'),
                         ),
                       ),
@@ -461,7 +472,6 @@ class _ReadinessCard extends StatelessWidget {
               '${session.waitingPlayers.length} 人候场，至少需要 2 人',
               session.waitingPlayers.length >= 2,
             ),
-            ('场地', '固定使用 1 块场地', session.courts.length == 1),
           ]
         : [
             (
@@ -474,7 +484,6 @@ class _ReadinessCard extends StatelessWidget {
               '${session.waitingGroups.length} 组，至少需要 2 组',
               session.waitingGroups.length >= 2,
             ),
-            ('场地', '固定使用 1 块场地', session.courts.length == 1),
           ];
     final completed = items.where((item) => item.$3).length;
     return Container(
@@ -718,12 +727,12 @@ class _RosterBottomAction extends StatelessWidget {
         : missingPlayers > 0
         ? ('添加球友，还差 $missingPlayers 人', onAddPlayer)
         : singles
-        ? ('启动单打球局', onStart)
+        ? ('开始第一场单打', onStart)
         : missingGroups > 0 && ungrouped < 2
         ? ('再添加 1 名球友完成组队', onAddPlayer)
         : missingGroups > 0
         ? ('手动组成下一组，还差 $missingGroups 组', onManualGroup)
-        : ('启动双打球局', onStart);
+        : ('开始第一场双打', onStart);
     return SafeArea(
       top: false,
       child: Container(

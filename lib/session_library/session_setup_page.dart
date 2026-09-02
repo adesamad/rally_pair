@@ -141,22 +141,26 @@ class _SessionSetupPageState extends State<SessionSetupPage> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    '每个球局固定使用 1 块场地；单打按个人候场，双打按固定搭档候场。',
+                    '单打按个人候场，双打按固定搭档候场。',
                     style: TextStyle(color: RallyPairColors.textSecondary),
                   ),
                   const SizedBox(height: 16),
                   _SetupSection(
-                    title: '默认上下场方式',
+                    title: '轮换方式',
                     child: SegmentedButton<RotationMode>(
                       showSelectedIcon: false,
-                      segments: const [
-                        ButtonSegment(
+                      segments: [
+                        const ButtonSegment(
                           value: RotationMode.winnerStays,
                           label: Text('胜方留场'),
                         ),
                         ButtonSegment(
                           value: RotationMode.allRotate,
-                          label: Text('两组下场'),
+                          label: Text(
+                            _matchFormat == MatchFormat.singles
+                                ? '双方下场'
+                                : '两组下场',
+                          ),
                         ),
                       ],
                       selected: {_rotationMode},
@@ -165,19 +169,24 @@ class _SessionSetupPageState extends State<SessionSetupPage> {
                       },
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '整场球局会按这个规则自动轮换，开始后不可修改。',
+                    style: TextStyle(color: RallyPairColors.textSecondary),
+                  ),
                   const SizedBox(height: 16),
                   _SetupSection(
-                    title: '比分预设',
+                    title: '每局比分',
                     child: SegmentedButton<ScorePreset>(
                       showSelectedIcon: false,
                       segments: const [
                         ButtonSegment(
                           value: ScorePreset.quick11,
-                          label: Text('11 分快赛'),
+                          label: Text('11 分'),
                         ),
                         ButtonSegment(
                           value: ScorePreset.standard21,
-                          label: Text('21 分标准'),
+                          label: Text('21 分'),
                         ),
                       ],
                       selected: {_scorePreset},

@@ -5,11 +5,12 @@ import 'package:rally_pair/rally_pair_icon.dart';
 import 'package:rally_pair/rally_pair_theme.dart';
 import 'package:rally_pair/session_library/session_library_page.dart';
 import 'package:rally_pair/session_library/session_setup_page.dart';
+import 'package:rally_pair/session_library/session_summary_page.dart';
 import 'package:rally_pair/session_flow/live_session_page.dart';
 import 'package:rally_pair/session_flow/session_roster_page.dart';
 
 void main() {
-  testWidgets('新建球局可选择单打并固定为单场地单局', (tester) async {
+  testWidgets('新建球局直接选择赛制、轮换和比分规则', (tester) async {
     SessionSetup? result;
     await tester.pumpWidget(
       MaterialApp(
@@ -30,6 +31,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '周四单打练习');
     await tester.tap(find.text('单打 · 2 人'));
+    await tester.pump();
+    expect(find.text('轮换方式'), findsOneWidget);
+    expect(find.text('每局比分'), findsOneWidget);
+    expect(find.text('整场球局会按这个规则自动轮换，开始后不可修改。'), findsOneWidget);
+    await tester.tap(find.text('双方下场'));
     await tester.tap(find.text('创建球局'));
     await tester.pumpAndSettle();
 
@@ -37,6 +43,7 @@ void main() {
     expect(result!.matchFormat, MatchFormat.singles);
     expect(result!.courtCount, 1);
     expect(result!.singleGame, isTrue);
+    expect(result!.defaultRotationMode, RotationMode.allRotate);
   });
 
   testWidgets('准备页提供随机和手动组队，并按双人组启用开局', (tester) async {
@@ -51,8 +58,8 @@ void main() {
     expect(find.byKey(const ValueKey('random-groups')), findsOneWidget);
     expect(find.byKey(const ValueKey('manual-group')), findsOneWidget);
     expect(find.byKey(const ValueKey('session-readiness')), findsOneWidget);
-    expect(find.text('3 / 3'), findsOneWidget);
-    expect(find.text('启动双打球局'), findsOneWidget);
+    expect(find.text('2 / 2'), findsOneWidget);
+    expect(find.text('开始第一场双打'), findsOneWidget);
     expect(find.textContaining('玩家'), findsWidgets);
   });
 
@@ -81,10 +88,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('2 / 2'), findsOneWidget);
+    expect(find.text('1 / 1'), findsOneWidget);
     expect(find.byKey(const ValueKey('random-groups')), findsNothing);
     expect(find.byKey(const ValueKey('manual-group')), findsNothing);
-    expect(find.text('启动单打球局'), findsOneWidget);
+    expect(find.text('开始第一场单打'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -104,7 +111,42 @@ void main() {
     for (var index = 1; index <= 4; index++) {
       expect(find.text('玩家$index'), findsOneWidget);
     }
-    expect(find.text('录入胜方'), findsOneWidget);
+    expect(find.text('结束本场'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('结束本场只记录结果并自动应用球局轮换规则', (tester) async {
+    final session = _draft(8)..generateRandomGroups();
+    final first = session.startFirstMatch();
+    final store = _MemoryStore(session);
+
+    await tester.pumpWidget(
+      MaterialApp(home: LiveSessionPage(store: store, sessionId: 1)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('live-next-action-button')));
+    await tester.pumpAndSettle();
+    expect(find.text('提交后将按“胜方留场”自动轮转并安排下一场。'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is SegmentedButton<RotationMode>,
+      ),
+      findsNothing,
+    );
+
+    await tester.tap(find.text('A 方'));
+    await tester.tap(find.text('完成并安排下一场'));
+    await tester.pumpAndSettle();
+
+    final updated = (await store.load(1))!;
+    expect(
+      updated.matches.firstWhere((match) => match.id == first.id).state,
+      MatchState.completed,
+    );
+    expect(updated.matches.first.rotationMode, RotationMode.winnerStays);
+    expect(updated.matches.last.state, MatchState.ready);
+    expect(find.text('开始比赛'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -274,13 +316,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('live-next-action')), findsOneWidget);
-    expect(find.text('现场'), findsOneWidget);
-    expect(find.text('球友'), findsOneWidget);
-    expect(find.text('记录'), findsOneWidget);
-    expect(find.byKey(const ValueKey('assign-next-1')), findsOneWidget);
+    expect(find.byType(NavigationBar), findsNothing);
+    expect(find.byKey(const ValueKey('live-tool-people')), findsOneWidget);
+    expect(find.byKey(const ValueKey('live-tool-queue')), findsOneWidget);
+    expect(find.byKey(const ValueKey('live-tool-results')), findsOneWidget);
     expect(find.byKey(const ValueKey('assign-specific-1')), findsOneWidget);
 
-    await tester.tap(find.text('球友'));
+    await tester.tap(find.byKey(const ValueKey('live-tool-people')));
     await tester.pumpAndSettle();
 
     expect(find.text('随机组队'), findsOneWidget);
@@ -302,8 +344,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('live-next-action-button')));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('start-match-1')), findsOneWidget);
-    expect(find.textContaining('已排好对阵'), findsOneWidget);
+    expect(find.text('开始比赛'), findsOneWidget);
+    expect(find.textContaining('当前比赛已排好对阵'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -356,6 +398,62 @@ void main() {
     expect(find.text('球友表现'), findsOneWidget);
     expect(find.text('比赛记录'), findsOneWidget);
     expect(find.text('1 场'), findsOneWidget);
+    expect(find.text('4 / 4 人'), findsOneWidget);
+    expect(find.text('1.0 场'), findsOneWidget);
+    expect(find.text('100%'), findsNWidgets(2));
+    expect(find.textContaining('净胜分 +4'), findsNWidgets(2));
+    expect(find.text('修正结果'), findsNothing);
+
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('match-history-expansion')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('match-history-expansion')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('修正结果'), findsOneWidget);
+    expect(find.text('21'), findsOneWidget);
+    expect(find.text('17'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('球局总结区分实际上场和未上场球友', (tester) async {
+    final session = PlaySession.create(
+      id: 1,
+      setup: const SessionSetup(
+        title: '单打小样本',
+        courtCount: 1,
+        matchFormat: MatchFormat.singles,
+        scorePreset: ScorePreset.standard21,
+        randomSeed: 1,
+      ),
+    );
+    for (final name in const ['周子晴', '许文博', '林嘉宁', '沈知夏', '陈嘉树', '高远']) {
+      session.addPlayer(name);
+    }
+    session.start();
+    final match = session.assignNext(1);
+    session.startMatch(match.id);
+    session.finishMatch(
+      match.id,
+      MatchResult.gameScores(const [GameScore(21, 15)]),
+    );
+    session.resolveAllRotate(match.id);
+    session.cancelMatch(session.matches.last.id);
+    session.complete();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SessionSummaryPage(store: _MemoryStore(session), sessionId: 1),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 / 6 人'), findsOneWidget);
+    expect(find.text('未上场 4 人'), findsOneWidget);
+    expect(find.text('出场 1 场 · 1 胜 0 负'), findsOneWidget);
+    expect(find.text('出场 1 场 · 0 胜 1 负'), findsOneWidget);
+    expect(find.text('0 胜 0 负'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

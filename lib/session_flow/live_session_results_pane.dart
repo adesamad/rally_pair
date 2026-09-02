@@ -29,6 +29,7 @@ class _ResultsPane extends StatelessWidget {
             _ResultCard(
               match: completed[index],
               names: names,
+              showCourt: session.courts.length > 1,
               onCorrect: () => onCorrect(completed[index]),
             ),
             if (index != completed.length - 1) const SizedBox(height: 10),
@@ -42,11 +43,13 @@ class _ResultCard extends StatelessWidget {
   const _ResultCard({
     required this.match,
     required this.names,
+    required this.showCourt,
     required this.onCorrect,
   });
 
   final SessionMatch match;
   final Map<int, String> names;
+  final bool showCourt;
   final VoidCallback onCorrect;
 
   @override
@@ -64,7 +67,9 @@ class _ResultCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '${match.courtNumber} 号场 · 第 ${match.completedOrder} 场完成',
+            showCourt
+                ? '${match.courtNumber} 号场 · 第 ${match.completedOrder} 场完成'
+                : '第 ${match.completedOrder} 场完成',
             style: const TextStyle(color: RallyPairColors.textSecondary),
           ),
           const SizedBox(height: 10),
@@ -100,6 +105,204 @@ class _ResultCard extends StatelessWidget {
   }
 }
 
+class _FinishMatchDialog extends StatefulWidget {
+  const _FinishMatchDialog({
+    required this.match,
+    required this.names,
+    required this.scorePreset,
+    required this.defaultRotationMode,
+    required this.singles,
+  });
+
+  final SessionMatch match;
+  final Map<int, String> names;
+  final ScorePreset scorePreset;
+  final RotationMode defaultRotationMode;
+  final bool singles;
+
+  @override
+  State<_FinishMatchDialog> createState() => _FinishMatchDialogState();
+}
+
+class _FinishMatchDialogState extends State<_FinishMatchDialog> {
+  final _a = TextEditingController();
+  final _b = TextEditingController();
+  Side? _winner;
+  var _recordScore = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _a.dispose();
+    _b.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    MatchResult result;
+    if (_recordScore) {
+      final a = int.tryParse(_a.text.trim());
+      final b = int.tryParse(_b.text.trim());
+      if (a == null || b == null) {
+        setState(() => _error = '请把双方比分填写完整。');
+        return;
+      }
+      result = MatchResult.gameScores([GameScore(a, b)]);
+      try {
+        ScoreRules.validate(widget.scorePreset, result);
+      } on RuleViolation catch (error) {
+        setState(() => _error = ruleViolationMessage(error));
+        return;
+      }
+    } else {
+      final winner = _winner;
+      if (winner == null) {
+        setState(() => _error = '请选择本场胜方。');
+        return;
+      }
+      result = MatchResult.winnerOnly(winner);
+    }
+
+    Navigator.of(context).pop(result);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('结束本场'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('谁赢了？', style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 10),
+            _FinishWinnerChoice(
+              label: 'A 方',
+              names: _teamName(widget.match.teamA, widget.names),
+              selected: _winner == Side.a,
+              onPressed: () => setState(() {
+                _winner = Side.a;
+                _error = null;
+              }),
+            ),
+            const SizedBox(height: 8),
+            _FinishWinnerChoice(
+              label: 'B 方',
+              names: _teamName(widget.match.teamB, widget.names),
+              selected: _winner == Side.b,
+              onPressed: () => setState(() {
+                _winner = Side.b;
+                _error = null;
+              }),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => setState(() {
+                _recordScore = !_recordScore;
+                _error = null;
+              }),
+              child: Text(_recordScore ? '只记录胜方' : '补充具体比分'),
+            ),
+            if (_recordScore) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _a,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'A 方'),
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Text(':'),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _b,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'B 方'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 14),
+            Text(
+              '提交后将按“${widget.defaultRotationMode == RotationMode.winnerStays
+                  ? '胜方留场'
+                  : widget.singles
+                  ? '双方下场'
+                  : '两组下场'}”自动轮转并安排下一场。',
+              style: TextStyle(
+                color: RallyPairColors.textSecondary,
+                fontSize: 12,
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _error!,
+                style: const TextStyle(color: RallyPairColors.danger),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('继续比赛'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('完成并安排下一场')),
+      ],
+    );
+  }
+}
+
+class _FinishWinnerChoice extends StatelessWidget {
+  const _FinishWinnerChoice({
+    required this.label,
+    required this.names,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final String label;
+  final String names;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.all(14),
+        backgroundColor: selected ? RallyPairColors.surfaceSoft : null,
+        side: BorderSide(
+          color: selected ? RallyPairColors.primary : RallyPairColors.outline,
+          width: selected ? 1.5 : 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 3),
+          Text(
+            names,
+            style: const TextStyle(color: RallyPairColors.textSecondary),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _WinnerDialog extends StatelessWidget {
   const _WinnerDialog({
     required this.match,
@@ -114,7 +317,7 @@ class _WinnerDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('${match.courtNumber} 号场谁赢了？'),
+      title: const Text('修正比赛结果'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,

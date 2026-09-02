@@ -42,14 +42,19 @@ class _CourtPane extends StatelessWidget {
         .where((court) => court.state == CourtState.available)
         .length;
     final singles = session.setup.matchFormat == MatchFormat.singles;
+    final singleCourt = session.courts.length == 1;
     final waitingCount = singles
         ? session.waitingPlayers.length
         : session.waitingGroups.length;
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
       children: [
-        const _SectionIntro(title: '现场球场', description: '从这里开赛、取消比赛或登记胜方。'),
-        if (readyCount > 0 || (availableCount > 0 && waitingCount >= 2)) ...[
+        _SectionIntro(
+          title: singleCourt ? '当前球场' : '现场球场',
+          description: singleCourt ? '场上对阵和比赛状态会始终保留在这里。' : '查看每块场地，并处理对应比赛。',
+        ),
+        if (!singleCourt &&
+            (readyCount > 0 || (availableCount > 0 && waitingCount >= 2))) ...[
           const SizedBox(height: 12),
           OutlinedButton(
             key: const ValueKey('generate-assignments'),
@@ -73,6 +78,7 @@ class _CourtPane extends StatelessWidget {
             canFill: waitingCount > 0,
             canAssign: waitingCount >= 2,
             singles: singles,
+            singleCourt: singleCourt,
             onStart: onStart,
             onCancel: onCancel,
             onRecordWinner: onRecordWinner,
@@ -99,6 +105,7 @@ class _CourtCard extends StatelessWidget {
     required this.canFill,
     required this.canAssign,
     required this.singles,
+    required this.singleCourt,
     required this.onStart,
     required this.onCancel,
     required this.onRecordWinner,
@@ -117,6 +124,7 @@ class _CourtCard extends StatelessWidget {
   final bool canFill;
   final bool canAssign;
   final bool singles;
+  final bool singleCourt;
   final Future<bool> Function(int matchId) onStart;
   final Future<bool> Function(int matchId) onCancel;
   final ValueChanged<SessionMatch> onRecordWinner;
@@ -151,22 +159,30 @@ class _CourtCard extends StatelessWidget {
                 height: 40,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: RallyPairColors.court,
+                  color: singleCourt
+                      ? RallyPairColors.surfaceSoft
+                      : RallyPairColors.court,
                   borderRadius: BorderRadius.circular(13),
                 ),
-                child: Text(
-                  '${court.number}',
-                  style: const TextStyle(
-                    color: RallyPairColors.courtLine,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 18,
-                  ),
-                ),
+                child: singleCourt
+                    ? const RallyPairIcon(
+                        RallyPairIconData.court,
+                        semanticLabel: '当前球场',
+                        size: 22,
+                      )
+                    : Text(
+                        '${court.number}',
+                        style: const TextStyle(
+                          color: RallyPairColors.courtLine,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 18,
+                        ),
+                      ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  '${court.number} 号场',
+                  singleCourt ? '当前球场' : '${court.number} 号场',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
@@ -183,46 +199,67 @@ class _CourtCard extends StatelessWidget {
             ),
             if (court.state == CourtState.waitingOpponent) ...[
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: busy || !canFill
-                          ? null
-                          : () => onFill(court.number),
-                      child: Text(singles ? '补入下一人' : '补入下一组'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  TextButton(
+              if (singleCourt)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
                     onPressed: busy ? null : () => onRelease(court.number),
                     child: const Text('结束留场'),
                   ),
-                ],
-              ),
+                )
+              else
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: busy || !canFill
+                            ? null
+                            : () => onFill(court.number),
+                        child: Text(singles ? '补入下一人' : '补入下一组'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    TextButton(
+                      onPressed: busy ? null : () => onRelease(court.number),
+                      child: const Text('结束留场'),
+                    ),
+                  ],
+                ),
             ] else if (court.state == CourtState.available) ...[
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton(
-                      key: ValueKey('assign-next-${court.number}'),
-                      onPressed: busy || !canAssign
-                          ? null
-                          : () => onAssignNext(court.number),
-                      child: const Text('按顺序安排'),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  OutlinedButton(
+              if (singleCourt)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton(
                     key: ValueKey('assign-specific-${court.number}'),
                     onPressed: busy || !canAssign
                         ? null
                         : () => onAssignSpecific(court.number),
                     child: const Text('手动安排'),
                   ),
-                ],
-              ),
+                )
+              else
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton(
+                        key: ValueKey('assign-next-${court.number}'),
+                        onPressed: busy || !canAssign
+                            ? null
+                            : () => onAssignNext(court.number),
+                        child: const Text('按顺序安排'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    OutlinedButton(
+                      key: ValueKey('assign-specific-${court.number}'),
+                      onPressed: busy || !canAssign
+                          ? null
+                          : () => onAssignSpecific(court.number),
+                      child: const Text('手动安排'),
+                    ),
+                  ],
+                ),
             ],
           ] else ...[
             const SizedBox(height: 18),
@@ -242,56 +279,65 @@ class _CourtCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton(
-                    key: ValueKey(
-                      current.state == MatchState.ready
-                          ? 'start-match-${current.id}'
-                          : 'record-result-${current.id}',
-                    ),
-                    onPressed: busy
-                        ? null
-                        : current.state == MatchState.ready
-                        ? () => onStart(current.id)
-                        : current.state == MatchState.resultRecorded
-                        ? () => onRotate(current)
-                        : () => onRecordWinner(current),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _CourtActionIcon(
-                          data: current.state == MatchState.ready
-                              ? RallyPairIconData.matchStart
-                              : current.state == MatchState.resultRecorded
-                              ? RallyPairIconData.rotation
-                              : RallyPairIconData.scoreEntry,
-                          semanticLabel: current.state == MatchState.ready
-                              ? '开始比赛'
-                              : current.state == MatchState.resultRecorded
-                              ? '决定上下场'
-                              : '录入胜方',
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          current.state == MatchState.ready
-                              ? '开始比赛'
-                              : current.state == MatchState.resultRecorded
-                              ? '决定上下场'
-                              : '录入胜方',
-                        ),
-                      ],
+            if (!singleCourt)
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton(
+                      key: ValueKey(
+                        current.state == MatchState.ready
+                            ? 'start-match-${current.id}'
+                            : 'record-result-${current.id}',
+                      ),
+                      onPressed: busy
+                          ? null
+                          : current.state == MatchState.ready
+                          ? () => onStart(current.id)
+                          : current.state == MatchState.resultRecorded
+                          ? () => onRotate(current)
+                          : () => onRecordWinner(current),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _CourtActionIcon(
+                            data: current.state == MatchState.ready
+                                ? RallyPairIconData.matchStart
+                                : current.state == MatchState.resultRecorded
+                                ? RallyPairIconData.rotation
+                                : RallyPairIconData.scoreEntry,
+                            semanticLabel: current.state == MatchState.ready
+                                ? '开始比赛'
+                                : current.state == MatchState.resultRecorded
+                                ? '按规则继续'
+                                : '录入胜方',
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            current.state == MatchState.ready
+                                ? '开始比赛'
+                                : current.state == MatchState.resultRecorded
+                                ? '按规则继续'
+                                : '录入胜方',
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                TextButton(
+                  const SizedBox(width: 10),
+                  TextButton(
+                    onPressed: busy ? null : () => onCancel(current.id),
+                    child: const Text('取消比赛'),
+                  ),
+                ],
+              )
+            else
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
                   onPressed: busy ? null : () => onCancel(current.id),
                   child: const Text('取消比赛'),
                 ),
-              ],
-            ),
+              ),
           ],
         ],
       ),
@@ -431,7 +477,7 @@ class _MatchResultSummary extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           const Text(
-            '待决定上下场',
+            '待按规则轮转',
             style: TextStyle(
               color: RallyPairColors.primary,
               fontSize: 12,

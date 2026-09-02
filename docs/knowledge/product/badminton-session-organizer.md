@@ -1,11 +1,13 @@
 # 羽搭 / RallyPair 产品方向文档
 
 product_state: ready
-baseline_revision: 2026-08-30
+baseline_revision: 2026-09-02
 
 本文是“羽搭 / RallyPair”的当前有效产品基线。正式中文名、英文名和内部代号均已确定；后续计划、执行规格、App 设计、Flutter 实现、数据迁移和验收标准必须优先读取本文。
 
 2026-08-30 起，V1 收敛为单场地，并在创建时选择单打或双打。单打以个人为候场和轮转单位；双打继续使用持续双人组。11 分和 21 分都只记录一局最终比分。旧多场地和旧多局数据只用于非破坏兼容。
+
+2026-09-02 起，现场交互收敛为单一球局工作台。开始首场会一次完成启动、队首分配和开赛；轮换方式在创建球局时确定并于开局后冻结，每场结束只提交结果，系统自动轮转并准备下一场；球友、候场顺序和比赛记录作为上下文工具，不再与现场主循环并列为底部导航。
 
 ## 1. Product Goal
 
@@ -51,7 +53,7 @@ App 英文名：RallyPair。
 V1 必须闭合以下能力：
 
 1. 创建、修改、复制和删除本地球局。
-2. 配置球局名称、比分预设和可选的默认轮转方式。
+2. 配置球局名称、比分预设和整场必选的轮转方式。
 3. 添加、修改和移除本场玩家。
 4. 支持批量粘贴玩家名单，每行一个名称。
 5. 将未上场玩家切换为可组队、休息或离场状态。
@@ -76,9 +78,13 @@ V1 必须闭合以下能力：
 24. 支持取消未完成比赛，取消后不计入比赛统计。
 25. 支持修正已完成比赛结果并重算全部派生统计；已执行的历史轮转不因比分修正而自动回滚。
 26. 保存每名玩家和每个双人组的完成场次、胜负、得失分、搭档和对手关系。
-27. 球局结束后生成本地总结，并允许查看历史球局。
+27. 球局结束后生成本地总结，展示完成场数、上场覆盖、人均出场、实际参赛球友的胜负与胜率，并允许查看历史球局。
 28. 未结束球局在 App 重启后恢复到原场地、分组、队列、比分和轮转状态。
 29. 所有球局、玩家、双人组、场地、比赛和统计仅保存在本地。
+30. 新球局点击开始后必须直接进入首场比赛，不经过空球场和重复开赛确认。
+31. 每场结算只收集胜方或比分；系统必须自动应用创建球局时选择的轮转方式，不提供单场覆盖。
+32. 现场以当前比赛为唯一主工作区；球友、候场顺序和比赛记录降为上下文工具。
+33. 结束球局时，系统在确认后取消未完成比赛、保留已记录结果、释放留场单位并生成总结。
 
 ## 4. Non Goals
 
@@ -107,6 +113,7 @@ V1 必须闭合以下能力：
 - 与赛制人数一致的场地分配和比赛状态。
 - 比赛开始、结果录入和取消。
 - `winner_stays` 与 `all_rotate` 两种赛后轮转。
+- 创建球局时必须选择整场轮转方式，开局后冻结。
 - 场地等待下一组和继续下一场。
 - 球局完成与历史保存。
 
@@ -120,7 +127,6 @@ V1 必须闭合以下能力：
 - 未完成球局恢复。
 - 胜负、得失分、搭档和对手统计。
 - 破坏性删除确认。
-- 球局默认轮转方式和单场覆盖。
 
 ### Expansion Feature
 
@@ -148,19 +154,15 @@ Expansion Feature 不进入 V1，除非后续明确改变产品目标。
 -> 单打进入个人候场；双打选择随机组队或手动组队
 -> 双打生成持续 PairingGroup；奇数剩余玩家保持 ungrouped
 -> 组织者随机打乱候场单位顺序或手动排序
--> 组织者确认开始球局，比分预设和默认轮转方式被冻结
--> 组织者按赛制自动或手动选择两名玩家 / 两个双人组
--> Court.available -> Court.ready
+-> 组织者点击开始第一场
+-> 系统原子完成 PlaySession.active、队首分配与 Match.in_progress
 -> 具象化场地显示单打两人或双打四人的空间位置
--> 组织者确认比赛开始
--> Court.ready -> Court.in_play
--> 比赛结束后组织者选择胜方或录入一局最终比分
--> Match.in_progress -> Match.result_recorded
--> Court.in_play -> Court.awaiting_rotation
--> 组织者选择 winner_stays 或 all_rotate
--> 系统原子更新组队列、场地和下一场
--> 组织者继续下一场比赛
--> 无需继续时处理完所有未决轮转并结束球局
+-> 比赛结束后组织者只选择胜方或可选比分
+-> 系统自动使用创建时保存的球局轮转方式
+-> 系统原子完成 Match.completed、组队列更新与下一场 Match.ready
+-> 组织者确认下一场实际开始
+-> 无需继续时确认结束球局
+-> 系统取消未完成比赛、保留已记录结果并释放留场单位
 -> 系统冻结球局并生成总结
 ```
 
@@ -238,7 +240,7 @@ Match.result_recorded + Court.awaiting_rotation
 - source state: 无对应 PlaySession
 - target entity: PlaySession
 - preconditions: 本地存储可写
-- input fields: title, scorePreset, optional defaultRotationMode
+- input fields: title, scorePreset, defaultRotationMode
 - boundary checks: title 去除首尾空白后非空；枚举值受支持
 - state transition: none -> PlaySession.draft
 - success result: 创建可编辑球局
@@ -255,7 +257,7 @@ Match.result_recorded + Court.awaiting_rotation
 - source state: PlaySession.draft
 - target entity: PlaySession
 - preconditions: 球局尚未启动
-- input fields: title, scorePreset, optional defaultRotationMode
+- input fields: title, scorePreset, defaultRotationMode
 - boundary checks: 使用 create_session 的全部输入规则
 - state transition: PlaySession.draft -> PlaySession.draft
 - success result: 原子保存新设置
@@ -1201,7 +1203,7 @@ terminal states: deleted；Court 生命周期跟随 PlaySession。
 - condition: 本轮刚下场组不属于本次补位候选；补位只从轮转动作开始前的 waiting 集合读取
 - block result: 不创建下一 Match，保留 awaiting_rotation
 - feedback: 说明暂无符合条件的下一组
-- recovery path: 选择另一轮转方式、增加组或让场地等待
+- recovery path: 增加候场单位，或接受场地进入等待状态
 - verification assertion: 刚下场组不得在同一次轮转中立即重赛
 
 ### Boundary Check: rotation_atomicity
@@ -1369,8 +1371,8 @@ terminal states: deleted；Court 生命周期跟随 PlaySession。
 
 ### CourtWorkspace
 
-- entry source: active 球局的球场入口。
-- responsibilities: 以具象化羽毛球场作为核心对象，展示每块场地的两组、四名玩家、比分和当前动作；发起队列分配、手动分配、开赛、录分、轮转、补位和取消。
+- entry source: active 球局默认直接进入。
+- responsibilities: 以具象化羽毛球场作为唯一主工作区，展示当前参赛者、比赛状态和唯一下一动作；发起手动分配、开赛、合并结算、补位和取消。球友、候场顺序和比赛记录通过上下文工具进入，不与主工作区并列为底部导航。
 - object renderer: 必须保留标准羽毛球场空间关系，两组位于球网两侧，每组两名玩家落在可辨识位置；比分和轮转动作依附具体场地，不退化成仅含 A/B 文本的普通信息卡。
 - reference: `docs/work/icon_library/rally-pair-icon-palette-preview.html` 中已确认的具象化场地是语义基线；最终 Flutter 结构可适配尺寸，但不得丢失球场、站位和场地状态关系。
 - exit/back: 返回不暂停、不取消任何比赛或轮转。
@@ -1382,27 +1384,27 @@ terminal states: deleted；Court 生命周期跟随 PlaySession。
 ### MatchResultEntry
 
 - entry source: 从 Court.in_play 发起结果录入，或从 Match.completed 发起修正。
-- responsibilities: 选择 winner_only / game_scores；校验比分；提交或取消。
+- responsibilities: 当前比赛结算时只选择 winner_only / game_scores，提交后由 PlaySession 自动应用球局轮换规则；历史修正只修改结果和统计，不回滚轮转。
 - exit/back: 未提交时 Match 和 Court 保持原状态。
 - empty state: 不允许无胜方或空局分提交。
 - readonly state: canceled Match 不可进入。
 - error state: 显示具体局分错误，不进入 awaiting_rotation。
 - destructive confirmation: 修正 completed 结果时说明统计重算且历史轮转不回滚。
 
-### RotationDecision
+### RotationExecution
 
 - entry source: Match.result_recorded / Court.awaiting_rotation。
-- responsibilities: 选择 winner_stays 或 all_rotate；预览留场、下场和下一组；提交或取消。
-- exit/back: 未提交时保持 awaiting_rotation，不允许绕过决策创建下一场。
+- responsibilities: PlaySession 读取开局前保存的 defaultRotationMode，自动完成留场、下场和下一组安排；旧恢复状态只允许按球局规则继续。
+- exit/back: 正常结算不暴露独立轮换表面；旧恢复状态未继续时保持 awaiting_rotation。
 - empty state: 候场不足时显示将进入 waiting_opponent 或 available 的结果。
 - readonly state: 下一 Match.in_progress 后不得撤销上一轮转。
 - error state: 原子写入失败时完整保留未决轮转。
-- destructive confirmation: 下一场开始前允许重做轮转；开始后需要独立纠错流程。
+- destructive confirmation: 不提供单场重做轮转；历史结果纠错不回滚已执行轮转。
 
 ### SessionSummary
 
 - entry source: complete_session 或历史球局。
-- responsibilities: 展示最终比赛、玩家和组派生统计；进入单场结果修正；发起复制球局设置。
+- responsibilities: 优先展示完成场数、上场覆盖、人均出场和轮转均衡提示；只对实际上场球友展示出场、胜负、胜率、常搭档与可靠净胜分；未上场球友独立说明；比赛记录默认降权展开，并保留单场结果修正。
 - exit/back: 不改变结果。
 - empty state: 无 completed 比赛时显示“本场未产生有效比赛”，仍允许保留球局。
 - readonly state: 不提供继续组队、排场或轮转。
@@ -1456,7 +1458,7 @@ PlaySession derives PlayerSummary and GroupSummary from completed Match collecti
 
 - `winner_stays`: 胜方留场，败方进入队尾，从轮转前 waiting 队首选择一组补位。
 - `all_rotate`: 两组进入队尾，从轮转前 waiting 队首选择两组补位。
-- 两种轮转方式均为 V1 必需能力，可按球局提供默认值，并允许每场结算时选择。
+- 两种轮转方式均为 V1 必需能力；创建球局时必须选择一种，开局后整场自动执行。
 - 本轮刚下场组不进入本轮补位候选，避免即时重赛。
 - 没有足够补位组时不创建残缺 Match；场地进入 waiting_opponent 或 available。
 
@@ -1481,6 +1483,9 @@ PlaySession derives PlayerSummary and GroupSummary from completed Match collecti
 - completedMatchCount 只统计 `Match.completed`。
 - win / loss 只来自唯一胜方。
 - pointsFor / pointsAgainst 只聚合 game_scores，winner_only 不伪造分数。
+- 上场覆盖只统计至少参与一场 completed Match 的球友；人均出场按 completed Match 参赛人次除以本场球友总数。
+- 球友胜率只在 completedMatches 大于零时展示；净胜分只在该球友全部 completed Match 都记录 game_scores 时展示。
+- 本场表现排序只用于历史总结扫读，不等同于 MVP、竞技等级或跨球局能力评价。
 - 玩家搭档关系来自 Match 的组快照；组统计按 PairingGroup 身份聚合。
 - 结果修正后从 Match 集合全量重算。
 - 结果修正不自动回滚已开始或已完成的后续轮转。
@@ -1553,10 +1558,10 @@ PlaySession derives PlayerSummary and GroupSummary from completed Match collecti
 
 ### Assumption
 
-- assumption: winner_stays 与 all_rotate 可在每场结算时选择；球局默认值仅用于减少重复操作。
-- why low risk: 用户明确要求两种方式兼容，单场选择覆盖全部现场情况。
-- affected logic: RotationDecision 和默认配置。
-- validation needed: 原型阶段验证结算步骤足够短。
+- assumption: winner_stays 与 all_rotate 是球局级规则，active 状态不允许单场覆盖。
+- why low risk: 用户明确要求把规则决策前移，避免每场结算重复打断。
+- affected logic: SessionSetup、MatchResultEntry 和 RotationExecution。
+- validation needed: 真实设备连续完成多场，确认轮换选择不再重复出现。
 
 ### Assumption
 

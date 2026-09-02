@@ -31,9 +31,6 @@ class _LiveSessionPageState extends State<LiveSessionPage> {
   Object? _error;
   var _loading = true;
   var _busy = false;
-  var _destination = 0;
-  var _workspaceSection = 0;
-  var _peopleSection = 0;
 
   @override
   void initState() {
@@ -104,12 +101,6 @@ class _LiveSessionPageState extends State<LiveSessionPage> {
     });
     if (!mounted || !succeeded) return;
     final message = count == 0 ? '当前没有足够的候场玩家或空闲场地。' : '已生成 $count 场分组。';
-    if (count > 0) {
-      setState(() {
-        _destination = 0;
-        _workspaceSection = 0;
-      });
-    }
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
@@ -204,23 +195,25 @@ class _LiveSessionPageState extends State<LiveSessionPage> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              DropdownButtonFormField<int>(
-                initialValue: courtNumber,
-                decoration: const InputDecoration(labelText: '场地'),
-                items: [
-                  for (final court in courts)
-                    DropdownMenuItem(
-                      value: court.number,
-                      child: Text(court.name),
-                    ),
-                ],
-                onChanged: (value) {
-                  if (value != null) {
-                    setDialogState(() => courtNumber = value);
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
+              if (courts.length > 1) ...[
+                DropdownButtonFormField<int>(
+                  initialValue: courtNumber,
+                  decoration: const InputDecoration(labelText: '场地'),
+                  items: [
+                    for (final court in courts)
+                      DropdownMenuItem(
+                        value: court.number,
+                        child: Text(court.name),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setDialogState(() => courtNumber = value);
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+              ],
               DropdownButtonFormField<int>(
                 initialValue: firstGroupId,
                 decoration: const InputDecoration(labelText: '第一组'),
@@ -285,12 +278,7 @@ class _LiveSessionPageState extends State<LiveSessionPage> {
         secondGroupId: selected.$3,
       ),
     );
-    if (mounted && succeeded) {
-      setState(() {
-        _destination = 0;
-        _workspaceSection = 0;
-      });
-    }
+    if (!mounted || !succeeded) return;
   }
 
   Future<void> _assignSpecificPlayers([int? initialCourtNumber]) async {
@@ -314,21 +302,25 @@ class _LiveSessionPageState extends State<LiveSessionPage> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              DropdownButtonFormField<int>(
-                initialValue: courtNumber,
-                decoration: const InputDecoration(labelText: '场地'),
-                items: [
-                  for (final court in courts)
-                    DropdownMenuItem(
-                      value: court.number,
-                      child: Text(court.name),
-                    ),
-                ],
-                onChanged: (value) {
-                  if (value != null) setDialogState(() => courtNumber = value);
-                },
-              ),
-              const SizedBox(height: 12),
+              if (courts.length > 1) ...[
+                DropdownButtonFormField<int>(
+                  initialValue: courtNumber,
+                  decoration: const InputDecoration(labelText: '场地'),
+                  items: [
+                    for (final court in courts)
+                      DropdownMenuItem(
+                        value: court.number,
+                        child: Text(court.name),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setDialogState(() => courtNumber = value);
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+              ],
               DropdownButtonFormField<int>(
                 initialValue: firstPlayerId,
                 decoration: const InputDecoration(labelText: 'A 方'),
@@ -389,25 +381,16 @@ class _LiveSessionPageState extends State<LiveSessionPage> {
         secondPlayerId: selected.$3,
       ),
     );
-    if (mounted && succeeded) {
-      setState(() {
-        _destination = 0;
-        _workspaceSection = 0;
-      });
-    }
+    if (!mounted || !succeeded) return;
   }
 
   Future<void> _assignNext(int courtNumber) async {
+    final singleCourt = _session?.courts.length == 1;
     final succeeded = await _update(
       (session) => session.assignNext(courtNumber),
-      successMessage: '$courtNumber 号场已安排对阵。',
+      successMessage: singleCourt ? '下一场已经排好。' : '$courtNumber 号场已安排对阵。',
     );
-    if (mounted && succeeded) {
-      setState(() {
-        _destination = 0;
-        _workspaceSection = 0;
-      });
-    }
+    if (!mounted || !succeeded) return;
   }
 
   Future<void> _renamePlayer(SessionPlayer player) async {
@@ -443,60 +426,33 @@ class _LiveSessionPageState extends State<LiveSessionPage> {
     await _update((value) => value.removePlayer(player.id));
   }
 
-  Future<void> _recordWinner(SessionMatch match) async {
-    final result = await showMatchResultDialog(
+  Future<void> _finishMatch(SessionMatch match) async {
+    final result = await showMatchFinishDialog(
       context,
       match: match,
       names: _playerNames(_session!),
       scorePreset: _session!.setup.scorePreset,
+      defaultRotationMode: _session!.setup.defaultRotationMode,
+      singles: _session!.setup.matchFormat == MatchFormat.singles,
     );
     if (!mounted || result == null) return;
     final saved = await _update(
-      (session) => session.finishMatch(match.id, result),
-      successMessage: '${match.courtNumber} 号场结果已记录。',
+      (session) => session.finishAndRotate(match.id, result),
     );
     if (!mounted || !saved) return;
-    await _chooseRotation(
-      _session!.matches.firstWhere((m) => m.id == match.id),
+    final nextReady = _session!.matches.any(
+      (value) => value.state == MatchState.ready,
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(nextReady ? '本场已完成，下一场已经排好。' : '本场已完成，候场顺序已更新。')),
     );
   }
 
-  Future<void> _chooseRotation(SessionMatch match) async {
-    final mode = await showDialog<RotationMode>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('这一场怎么上下场？'),
-        content: const Text('选择后会立即更新这块场地和候场顺序。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('稍后决定'),
-          ),
-          OutlinedButton(
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(RotationMode.allRotate),
-            child: Text(
-              _session?.setup.matchFormat == MatchFormat.singles
-                  ? '双方下场'
-                  : '两组下场',
-            ),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(RotationMode.winnerStays),
-            child: const Text('胜方留场'),
-          ),
-        ],
-      ),
+  Future<void> _resolveRecorded(SessionMatch match) async {
+    await _update(
+      (session) => session.applyRotation(match.id),
+      successMessage: '已按本场球局规则完成轮换。',
     );
-    if (!mounted || mode == null) return;
-    await _update((session) {
-      if (mode == RotationMode.winnerStays) {
-        session.resolveWinnerStays(match.id);
-      } else {
-        session.resolveAllRotate(match.id);
-      }
-    });
   }
 
   Future<void> _correctResult(SessionMatch match) async {
@@ -514,11 +470,24 @@ class _LiveSessionPageState extends State<LiveSessionPage> {
   }
 
   Future<void> _completeSession() async {
+    final hasUnfinished = _session!.matches.any(
+      (match) =>
+          match.state == MatchState.ready ||
+          match.state == MatchState.inProgress ||
+          match.state == MatchState.resultRecorded,
+    );
+    final hasStaying = _session!.courts.any(
+      (court) => court.state == CourtState.waitingOpponent,
+    );
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('结束本场球局？'),
-        content: const Text('只有全部场地已空闲、没有待开赛或待轮转比赛时才能结束。'),
+        content: Text(
+          hasUnfinished || hasStaying
+              ? '当前未完成的比赛会取消，已记录结果会保留，留场球友会回到候场。结束后将生成本场总结。'
+              : '结束后将冻结本场记录并生成总结。',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -532,9 +501,150 @@ class _LiveSessionPageState extends State<LiveSessionPage> {
       ),
     );
     if (!mounted || confirmed != true) return;
-    final completed = await _update((session) => session.complete());
+    final completed = await _update((session) => session.end());
     if (!mounted || !completed) return;
     Navigator.of(context).pop();
+  }
+
+  Future<void> _openTool(_LiveTool tool) async {
+    var peopleSection = 0;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final session = _session;
+          if (session == null) return const SizedBox.shrink();
+
+          Future<void> refresh(Future<void> Function() action) async {
+            await action();
+            if (sheetContext.mounted) setSheetState(() {});
+          }
+
+          final content = switch (tool) {
+            _LiveTool.people =>
+              session.setup.matchFormat == MatchFormat.singles
+                  ? _WaitingPane(
+                      session: session,
+                      busy: _busy,
+                      onAdd: () => refresh(_addPlayer),
+                      onBatchAdd: () => refresh(_batchAdd),
+                      onRest: (playerId) => refresh(
+                        () async =>
+                            _update((value) => value.setResting(playerId)),
+                      ),
+                      onReturn: (playerId) => refresh(
+                        () async =>
+                            _update((value) => value.restoreWaiting(playerId)),
+                      ),
+                      onLeave: (playerId) => refresh(
+                        () async => _update((value) => value.setLeft(playerId)),
+                      ),
+                      onRename: (player) =>
+                          refresh(() => _renamePlayer(player)),
+                      onRemove: (player) =>
+                          refresh(() => _removePlayer(player)),
+                    )
+                  : Column(
+                      children: [
+                        _WorkspaceSwitch(
+                          selected: peopleSection,
+                          firstLabel: '双人组',
+                          secondLabel: '球友状态',
+                          onChanged: (value) {
+                            setSheetState(() => peopleSection = value);
+                          },
+                        ),
+                        Expanded(
+                          child: peopleSection == 0
+                              ? _GroupingPane(
+                                  session: session,
+                                  busy: _busy,
+                                  onRandomGroups: () => refresh(
+                                    () async => _update(
+                                      (value) => value.generateRandomGroups(),
+                                    ),
+                                  ),
+                                  onManualGroup: () => refresh(_manualGroup),
+                                  onReplaceGroupPlayer: (group) =>
+                                      refresh(() => _replaceGroupPlayer(group)),
+                                  onDissolveGroup: (group) => refresh(
+                                    () async => _update(
+                                      (value) => value.dissolveGroup(group.id),
+                                    ),
+                                  ),
+                                )
+                              : _WaitingPane(
+                                  session: session,
+                                  busy: _busy,
+                                  onAdd: () => refresh(_addPlayer),
+                                  onBatchAdd: () => refresh(_batchAdd),
+                                  onRest: (playerId) => refresh(
+                                    () async => _update(
+                                      (value) => value.setResting(playerId),
+                                    ),
+                                  ),
+                                  onReturn: (playerId) => refresh(
+                                    () async => _update(
+                                      (value) => value.restoreWaiting(playerId),
+                                    ),
+                                  ),
+                                  onLeave: (playerId) => refresh(
+                                    () async => _update(
+                                      (value) => value.setLeft(playerId),
+                                    ),
+                                  ),
+                                  onRename: (player) =>
+                                      refresh(() => _renamePlayer(player)),
+                                  onRemove: (player) =>
+                                      refresh(() => _removePlayer(player)),
+                                ),
+                        ),
+                      ],
+                    ),
+            _LiveTool.queue => _RotationPane(
+              session: session,
+              busy: _busy,
+              onRandomize: () => refresh(
+                () async => _update(
+                  (value) => value.setup.matchFormat == MatchFormat.singles
+                      ? value.randomizePlayerQueue()
+                      : value.randomizeGroupQueue(),
+                ),
+              ),
+              onMove: (id, targetIndex) => refresh(
+                () async => _update(
+                  (value) => value.setup.matchFormat == MatchFormat.singles
+                      ? value.reorderPlayer(id, targetIndex)
+                      : value.reorderGroup(id, targetIndex),
+                ),
+              ),
+            ),
+            _LiveTool.results => _ResultsPane(
+              session: session,
+              onCorrect: (match) => refresh(() => _correctResult(match)),
+            ),
+          };
+          return FractionallySizedBox(
+            heightFactor: .92,
+            child: Column(
+              children: [
+                _ToolHeader(
+                  title: switch (tool) {
+                    _LiveTool.people => '球友与组队',
+                    _LiveTool.queue => '候场顺序',
+                    _LiveTool.results => '比赛记录',
+                  },
+                  onClose: () => Navigator.of(sheetContext).pop(),
+                ),
+                Expanded(child: content),
+              ],
+            ),
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -564,37 +674,6 @@ class _LiveSessionPageState extends State<LiveSessionPage> {
               )
             : null,
       ),
-      bottomNavigationBar: session == null || _loading || _error != null
-          ? null
-          : NavigationBar(
-              selectedIndex: _destination,
-              onDestinationSelected: (value) {
-                setState(() => _destination = value);
-              },
-              destinations: const [
-                NavigationDestination(
-                  icon: RallyPairIcon(
-                    RallyPairIconData.court,
-                    semanticLabel: '现场',
-                  ),
-                  label: '现场',
-                ),
-                NavigationDestination(
-                  icon: RallyPairIcon(
-                    RallyPairIconData.grouping,
-                    semanticLabel: '球友',
-                  ),
-                  label: '球友',
-                ),
-                NavigationDestination(
-                  icon: RallyPairIcon(
-                    RallyPairIconData.result,
-                    semanticLabel: '记录',
-                  ),
-                  label: '记录',
-                ),
-              ],
-            ),
       body: SafeArea(
         top: false,
         child: switch ((_loading, _error, session)) {
@@ -606,27 +685,53 @@ class _LiveSessionPageState extends State<LiveSessionPage> {
           (false, null, final value?) => Column(
             children: [
               _SessionSummaryBand(session: value),
-              if (_destination == 0)
-                _NextActionCard(
+              _LiveToolsBar(
+                onPeople: () => _openTool(_LiveTool.people),
+                onQueue: () => _openTool(_LiveTool.queue),
+                onResults: () => _openTool(_LiveTool.results),
+              ),
+              _NextActionCard(
+                session: value,
+                busy: _busy,
+                onStart: (matchId) => _update(
+                  (session) => session.startMatch(matchId),
+                  successMessage: '比赛已开始。',
+                ),
+                onFinish: _finishMatch,
+                onRotate: _resolveRecorded,
+                onFill: (courtNumber) =>
+                    _update((session) => session.fillStayingCourt(courtNumber)),
+                onAssign: _assignNext,
+                onOpenPeople: () => _openTool(_LiveTool.people),
+              ),
+              Expanded(
+                child: _CourtPane(
                   session: value,
                   busy: _busy,
+                  onGenerate: () => _generate(regenerate: false),
+                  onRegenerate: () => _generate(regenerate: true),
                   onStart: (matchId) => _update(
                     (session) => session.startMatch(matchId),
                     successMessage: '比赛已开始。',
                   ),
-                  onRotate: _chooseRotation,
+                  onCancel: (matchId) => _update(
+                    (value) => value.cancelMatch(matchId),
+                    successMessage: '比赛已取消，球友已回到候场。',
+                  ),
+                  onRecordWinner: _finishMatch,
+                  onRotate: _resolveRecorded,
                   onFill: (courtNumber) => _update(
                     (session) => session.fillStayingCourt(courtNumber),
                   ),
-                  onAssign: _assignNext,
-                  onOpenPeople: () {
-                    setState(() {
-                      _destination = 1;
-                      _peopleSection = 0;
-                    });
-                  },
+                  onRelease: (courtNumber) => _update(
+                    (session) => session.releaseStayingCourt(courtNumber),
+                  ),
+                  onAssignNext: _assignNext,
+                  onAssignSpecific: _assignSpecificGroups,
+                  onRemoveCourt: (courtNumber) =>
+                      _update((session) => session.removeCourt(courtNumber)),
                 ),
-              Expanded(child: _buildDestination(value)),
+              ),
             ],
           ),
           _ => const SizedBox.shrink(),
@@ -634,120 +739,79 @@ class _LiveSessionPageState extends State<LiveSessionPage> {
       ),
     );
   }
+}
 
-  Widget _buildDestination(PlaySession session) {
-    return switch (_destination) {
-      0 => Column(
+enum _LiveTool { people, queue, results }
+
+class _LiveToolsBar extends StatelessWidget {
+  const _LiveToolsBar({
+    required this.onPeople,
+    required this.onQueue,
+    required this.onResults,
+  });
+
+  final VoidCallback onPeople;
+  final VoidCallback onQueue;
+  final VoidCallback onResults;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+      child: Row(
         children: [
-          _WorkspaceSwitch(
-            selected: _workspaceSection,
-            firstLabel: '球场',
-            secondLabel: '上场顺序',
-            onChanged: (value) => setState(() => _workspaceSection = value),
-          ),
           Expanded(
-            child: _workspaceSection == 0
-                ? _CourtPane(
-                    session: session,
-                    busy: _busy,
-                    onGenerate: () => _generate(regenerate: false),
-                    onRegenerate: () => _generate(regenerate: true),
-                    onStart: (matchId) => _update(
-                      (value) => value.startMatch(matchId),
-                      successMessage: '比赛已开始。',
-                    ),
-                    onCancel: (matchId) => _update(
-                      (value) => value.cancelMatch(matchId),
-                      successMessage: '比赛已取消，玩家已回到候场。',
-                    ),
-                    onRecordWinner: _recordWinner,
-                    onRotate: _chooseRotation,
-                    onFill: (courtNumber) =>
-                        _update((value) => value.fillStayingCourt(courtNumber)),
-                    onRelease: (courtNumber) => _update(
-                      (value) => value.releaseStayingCourt(courtNumber),
-                    ),
-                    onAssignNext: _assignNext,
-                    onAssignSpecific: _assignSpecificGroups,
-                    onRemoveCourt: (courtNumber) =>
-                        _update((value) => value.removeCourt(courtNumber)),
-                  )
-                : _RotationPane(
-                    session: session,
-                    busy: _busy,
-                    onRandomize: () => _update(
-                      (value) => value.setup.matchFormat == MatchFormat.singles
-                          ? value.randomizePlayerQueue()
-                          : value.randomizeGroupQueue(),
-                    ),
-                    onMove: (id, targetIndex) => _update(
-                      (value) => value.setup.matchFormat == MatchFormat.singles
-                          ? value.reorderPlayer(id, targetIndex)
-                          : value.reorderGroup(id, targetIndex),
-                    ),
-                  ),
+            child: OutlinedButton(
+              key: const ValueKey('live-tool-people'),
+              onPressed: onPeople,
+              child: const Text('球友'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: OutlinedButton(
+              key: const ValueKey('live-tool-queue'),
+              onPressed: onQueue,
+              child: const Text('候场顺序'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: OutlinedButton(
+              key: const ValueKey('live-tool-results'),
+              onPressed: onResults,
+              child: const Text('比赛记录'),
+            ),
           ),
         ],
       ),
-      1 =>
-        session.setup.matchFormat == MatchFormat.singles
-            ? _WaitingPane(
-                session: session,
-                busy: _busy,
-                onAdd: _addPlayer,
-                onBatchAdd: _batchAdd,
-                onRest: (playerId) =>
-                    _update((value) => value.setResting(playerId)),
-                onReturn: (playerId) =>
-                    _update((value) => value.restoreWaiting(playerId)),
-                onLeave: (playerId) =>
-                    _update((value) => value.setLeft(playerId)),
-                onRename: _renamePlayer,
-                onRemove: _removePlayer,
-              )
-            : Column(
-                children: [
-                  _WorkspaceSwitch(
-                    selected: _peopleSection,
-                    firstLabel: '双人组',
-                    secondLabel: '球友状态',
-                    onChanged: (value) =>
-                        setState(() => _peopleSection = value),
-                  ),
-                  Expanded(
-                    child: _peopleSection == 0
-                        ? _GroupingPane(
-                            session: session,
-                            busy: _busy,
-                            onRandomGroups: () => _update(
-                              (value) => value.generateRandomGroups(),
-                            ),
-                            onManualGroup: _manualGroup,
-                            onReplaceGroupPlayer: _replaceGroupPlayer,
-                            onDissolveGroup: (group) => _update(
-                              (value) => value.dissolveGroup(group.id),
-                            ),
-                          )
-                        : _WaitingPane(
-                            session: session,
-                            busy: _busy,
-                            onAdd: _addPlayer,
-                            onBatchAdd: _batchAdd,
-                            onRest: (playerId) =>
-                                _update((value) => value.setResting(playerId)),
-                            onReturn: (playerId) => _update(
-                              (value) => value.restoreWaiting(playerId),
-                            ),
-                            onLeave: (playerId) =>
-                                _update((value) => value.setLeft(playerId)),
-                            onRename: _renamePlayer,
-                            onRemove: _removePlayer,
-                          ),
-                  ),
-                ],
-              ),
-      _ => _ResultsPane(session: session, onCorrect: _correctResult),
-    };
+    );
+  }
+}
+
+class _ToolHeader extends StatelessWidget {
+  const _ToolHeader({required this.title, required this.onClose});
+
+  final String title;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 12, 12, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(title, style: Theme.of(context).textTheme.titleLarge),
+          ),
+          IconButton(
+            tooltip: '关闭',
+            onPressed: onClose,
+            icon: const Icon(Icons.close_rounded),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -768,6 +832,26 @@ Future<MatchResult?> showMatchResultDialog(
   );
 }
 
+Future<MatchResult?> showMatchFinishDialog(
+  BuildContext context, {
+  required SessionMatch match,
+  required Map<int, String> names,
+  required ScorePreset scorePreset,
+  required RotationMode defaultRotationMode,
+  required bool singles,
+}) {
+  return showDialog<MatchResult>(
+    context: context,
+    builder: (_) => _FinishMatchDialog(
+      match: match,
+      names: names,
+      scorePreset: scorePreset,
+      defaultRotationMode: defaultRotationMode,
+      singles: singles,
+    ),
+  );
+}
+
 String _teamName(Team team, Map<int, String> names) {
   final first = names[team.first] ?? '未知玩家';
   final second = team.second;
@@ -779,6 +863,7 @@ class _NextActionCard extends StatelessWidget {
     required this.session,
     required this.busy,
     required this.onStart,
+    required this.onFinish,
     required this.onRotate,
     required this.onFill,
     required this.onAssign,
@@ -788,6 +873,7 @@ class _NextActionCard extends StatelessWidget {
   final PlaySession session;
   final bool busy;
   final Future<bool> Function(int matchId) onStart;
+  final ValueChanged<SessionMatch> onFinish;
   final ValueChanged<SessionMatch> onRotate;
   final ValueChanged<int> onFill;
   final ValueChanged<int> onAssign;
@@ -800,6 +886,9 @@ class _NextActionCard extends StatelessWidget {
         .firstOrNull;
     final ready = session.matches
         .where((match) => match.state == MatchState.ready)
+        .firstOrNull;
+    final inProgress = session.matches
+        .where((match) => match.state == MatchState.inProgress)
         .firstOrNull;
     final waitingCourt = session.courts
         .where((court) => court.state == CourtState.waitingOpponent)
@@ -814,6 +903,10 @@ class _NextActionCard extends StatelessWidget {
     final waitingCount = singles
         ? session.waitingPlayers.length
         : session.waitingGroups.length;
+    String matchLabel(SessionMatch match) =>
+        session.courts.length == 1 ? '当前比赛' : '${match.courtNumber} 号场';
+    String courtLabel(Court court) =>
+        session.courts.length == 1 ? '当前球场' : '${court.number} 号场';
 
     late final String title;
     late final String description;
@@ -821,17 +914,22 @@ class _NextActionCard extends StatelessWidget {
     VoidCallback? action;
 
     if (recorded != null) {
-      title = '${recorded.courtNumber} 号场已记录结果';
-      description = '先决定这一场谁留场、谁下场，再继续下一场。';
-      actionLabel = '决定上下场';
+      title = '${matchLabel(recorded)}已记录结果';
+      description = '结果已保存，可以按本场球局规则继续安排下一场。';
+      actionLabel = '按规则继续';
       action = () => onRotate(recorded);
+    } else if (inProgress != null) {
+      title = '${matchLabel(inProgress)}正在进行';
+      description = '比赛结束后，在这里一次完成结果和上下场。';
+      actionLabel = '结束本场';
+      action = () => onFinish(inProgress);
     } else if (ready != null) {
-      title = '${ready.courtNumber} 号场已排好对阵';
+      title = '${matchLabel(ready)}已排好对阵';
       description = singles ? '两名球友已到位，确认后开始单打。' : '两组球友已到位，确认后开始双打。';
       actionLabel = '开始比赛';
       action = () => onStart(ready.id);
     } else if (waitingCourt != null) {
-      title = '${waitingCourt.number} 号场正在等待对手';
+      title = '${courtLabel(waitingCourt)}正在等待对手';
       if (waitingCount > 0) {
         description = singles ? '已有候场球友，可以直接补入开始下一场。' : '已有候场组，可以直接补入开始下一场。';
         actionLabel = singles ? '补入下一人' : '补入下一组';
@@ -842,7 +940,7 @@ class _NextActionCard extends StatelessWidget {
         action = onOpenPeople;
       }
     } else if (availableCourt != null && waitingCount >= 2) {
-      title = '${availableCourt.number} 号场可以安排下一场';
+      title = '${courtLabel(availableCourt)}可以安排下一场';
       description = singles ? '将按当前候场顺序取前两名球友进入场地。' : '将按当前候场顺序取队首两组进入场地。';
       actionLabel = '按顺序安排';
       action = () => onAssign(availableCourt.number);
@@ -852,13 +950,8 @@ class _NextActionCard extends StatelessWidget {
       actionLabel = '去完成组队';
       action = onOpenPeople;
     } else {
-      final inPlay = session.matches
-          .where((match) => match.state == MatchState.inProgress)
-          .length;
-      title = inPlay > 0 ? '$inPlay 场比赛正在进行' : '现场暂无待处理动作';
-      description = inPlay > 0
-          ? '比赛结束后，在对应球场录入胜方或最终比分。'
-          : '可以检查球友和候场情况，或结束本场球局。';
+      title = '现场暂无待处理动作';
+      description = '可以检查球友和候场情况，或结束本场球局。';
     }
 
     return Container(

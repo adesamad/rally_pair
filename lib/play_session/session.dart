@@ -362,6 +362,13 @@ final class PlaySession {
     _status = SessionStatus.active;
   }
 
+  SessionMatch startFirstMatch() {
+    start();
+    final match = assignNext(courts.first.number);
+    startMatch(match.id);
+    return _match(match.id);
+  }
+
   List<PairingGroup> generateRandomGroups([Iterable<int>? selectedPlayerIds]) {
     _requirePlayerEditing();
     if (_setup.matchFormat != MatchFormat.doubles) {
@@ -750,6 +757,20 @@ final class PlaySession {
     }
   }
 
+  void finishAndRotate(int matchId, MatchResult result) {
+    finishMatch(matchId, result);
+    applyRotation(matchId);
+  }
+
+  void applyRotation(int matchId) {
+    switch (_setup.defaultRotationMode) {
+      case RotationMode.winnerStays:
+        resolveWinnerStays(matchId);
+      case RotationMode.allRotate:
+        resolveAllRotate(matchId);
+    }
+  }
+
   void cancelMatch(int matchId) {
     _requireStatus(SessionStatus.active);
     final match = _match(matchId);
@@ -922,6 +943,40 @@ final class PlaySession {
         _groups[group.id] = group.copyWith(state: GroupState.archived);
       }
     }
+  }
+
+  void end() {
+    _requireStatus(SessionStatus.active);
+
+    final recorded = matches
+        .where((match) => match.state == MatchState.resultRecorded)
+        .map((match) => match.id)
+        .toList(growable: false);
+    for (final matchId in recorded) {
+      resolveAllRotate(matchId);
+    }
+
+    final unfinished = matches
+        .where(
+          (match) =>
+              match.state == MatchState.ready ||
+              match.state == MatchState.inProgress,
+        )
+        .map((match) => match.id)
+        .toList(growable: false);
+    for (final matchId in unfinished) {
+      cancelMatch(matchId);
+    }
+
+    final stayingCourts = courts
+        .where((court) => court.state == CourtState.waitingOpponent)
+        .map((court) => court.number)
+        .toList(growable: false);
+    for (final courtNumber in stayingCourts) {
+      releaseStayingCourt(courtNumber);
+    }
+
+    complete();
   }
 
   PlaySession duplicate({

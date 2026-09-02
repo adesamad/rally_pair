@@ -108,6 +108,83 @@ void main() {
   });
 
   group('场地比赛与轮转', () {
+    test('开始第一场会一次完成启动、安排和开赛', () {
+      final session = _draft(4)..generateRandomGroups();
+
+      final match = session.startFirstMatch();
+
+      expect(session.status, SessionStatus.active);
+      expect(match.state, MatchState.inProgress);
+      expect(session.courts.single.state, CourtState.inPlay);
+    });
+
+    test('完成比赛会应用默认轮转并直接准备下一场', () {
+      final session = PlaySession.create(
+        id: 8,
+        setup: const SessionSetup(
+          title: '默认轮转',
+          courtCount: 1,
+          matchFormat: MatchFormat.singles,
+          scorePreset: ScorePreset.quick11,
+          randomSeed: 8,
+          defaultRotationMode: RotationMode.allRotate,
+        ),
+      );
+      for (var index = 1; index <= 4; index++) {
+        session.addPlayer('单打$index');
+      }
+      final first = session.startFirstMatch();
+
+      session.finishAndRotate(first.id, MatchResult.winnerOnly(Side.a));
+
+      expect(session.matches.first.state, MatchState.completed);
+      expect(session.matches.first.rotationMode, RotationMode.allRotate);
+      expect(session.matches.last.players, [3, 4]);
+      expect(session.matches.last.state, MatchState.ready);
+    });
+
+    test('结束球局会取消未完成比赛并生成可总结状态', () {
+      final session = _draft(4)..generateRandomGroups();
+      final match = session.startFirstMatch();
+
+      session.end();
+
+      expect(session.status, SessionStatus.completed);
+      expect(
+        session.matches.firstWhere((value) => value.id == match.id).state,
+        MatchState.canceled,
+      );
+      expect(session.courts.single.state, CourtState.available);
+    });
+
+    test('结束球局会保留已录结果并清理轮转生成的待开赛比赛', () {
+      final session = _active(8);
+      final match = session.assignNextGroups(1);
+      session.startMatch(match.id);
+      session.finishMatch(match.id, MatchResult.winnerOnly(Side.b));
+
+      session.end();
+
+      expect(session.status, SessionStatus.completed);
+      expect(session.matches.first.state, MatchState.completed);
+      expect(session.matches.first.rotationMode, RotationMode.allRotate);
+      expect(session.matches.last.state, MatchState.canceled);
+      expect(session.courts.single.state, CourtState.available);
+    });
+
+    test('结束球局会释放无对手的留场单位', () {
+      final session = _active(4);
+      final match = session.assignNextGroups(1);
+      session.startMatch(match.id);
+      session.finishAndRotate(match.id, MatchResult.winnerOnly(Side.a));
+      expect(session.courts.single.state, CourtState.waitingOpponent);
+
+      session.end();
+
+      expect(session.status, SessionStatus.completed);
+      expect(session.courts.single.state, CourtState.available);
+    });
+
     test('胜方留场会直接承接既有候场组', () {
       final session = _active(8);
       final first = session.assignNextGroups(1);
