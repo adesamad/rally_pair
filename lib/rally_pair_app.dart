@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'play_session/store.dart';
 import 'rally_pair_theme.dart';
@@ -11,11 +12,18 @@ class RallyPairApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: '羽搭',
-      debugShowCheckedModeBanner: false,
-      theme: RallyPairTheme.light,
-      home: SessionLibraryPage(store: store),
+    return ScreenUtilInit(
+      designSize: const Size(360, 800),
+      minTextAdapt: true,
+      splitScreenMode: true,
+      ensureScreenSize: true,
+      builder: (context, child) => MaterialApp(
+        title: '羽搭',
+        debugShowCheckedModeBanner: false,
+        theme: RallyPairTheme.light,
+        home: child,
+      ),
+      child: SessionLibraryPage(store: store),
     );
   }
 }

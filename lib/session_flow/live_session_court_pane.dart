@@ -155,8 +155,8 @@ class _CourtCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 40.r,
+                height: 40.r,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: singleCourt
@@ -262,19 +262,19 @@ class _CourtCard extends StatelessWidget {
                 ),
             ],
           ] else ...[
-            const SizedBox(height: 18),
+            const RSizedBox(height: 18),
             _BadmintonCourt(match: current, names: names),
             if (current.result != null) ...[
               const SizedBox(height: 10),
               _MatchResultSummary(match: current),
             ],
             if (current.relaxed) ...[
-              const SizedBox(height: 10),
-              const Text(
+              const RSizedBox(height: 10),
+              Text(
                 '本组已放宽连续搭档限制。',
                 style: TextStyle(
                   color: RallyPairColors.textSecondary,
-                  fontSize: 13,
+                  fontSize: 13.spMin,
                 ),
               ),
             ],

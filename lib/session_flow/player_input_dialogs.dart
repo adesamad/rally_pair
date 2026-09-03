@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import '../play_session/models.dart';
 import '../rally_pair_theme.dart';
@@ -53,7 +54,7 @@ Future<(int, int)?> showManualGroupDialog(
                 if (value != null) setDialogState(() => first = value);
               },
             ),
-            const SizedBox(height: 12),
+            const RSizedBox(height: 12),
             DropdownButtonFormField<int>(
               initialValue: second,
               decoration: const InputDecoration(labelText: '第二名玩家'),
@@ -112,7 +113,7 @@ Future<(int, int)?> showGroupMemberReplacementDialog(
                 if (value != null) setDialogState(() => source = value);
               },
             ),
-            const SizedBox(height: 12),
+            const RSizedBox(height: 12),
             DropdownButtonFormField<int>(
               initialValue: replacement,
               decoration: const InputDecoration(labelText: '换上的玩家'),
@@ -253,7 +254,7 @@ class _BatchPlayerDialogState extends State<_BatchPlayerDialog> {
               '每行一名玩家，空行会忽略，重名会自动跳过。',
               style: TextStyle(color: RallyPairColors.textSecondary),
             ),
-            const SizedBox(height: 14),
+            const RSizedBox(height: 14),
             TextField(
               controller: _controller,
               autofocus: true,

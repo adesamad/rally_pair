@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 enum RallyPairIconData {
@@ -34,10 +35,11 @@ class RallyPairIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final adaptedSize = size.r;
     return SvgPicture.asset(
       'assets/icons/${data.assetName}.svg',
-      width: size,
-      height: size,
+      width: adaptedSize,
+      height: adaptedSize,
       semanticsLabel: semanticLabel,
     );
   }

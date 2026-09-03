@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rally_pair/play_session/play_session.dart';
 import 'package:rally_pair/rally_pair_icon.dart';
@@ -13,7 +14,7 @@ void main() {
   testWidgets('新建球局直接选择赛制、轮换和比分规则', (tester) async {
     SessionSetup? result;
     await tester.pumpWidget(
-      MaterialApp(
+      _TestApp(
         home: Builder(
           builder: (context) => FilledButton(
             onPressed: () async {
@@ -51,7 +52,7 @@ void main() {
     final store = _MemoryStore(session);
 
     await tester.pumpWidget(
-      MaterialApp(home: SessionRosterPage(store: store, sessionId: 1)),
+      _TestApp(home: SessionRosterPage(store: store, sessionId: 1)),
     );
     await tester.pumpAndSettle();
 
@@ -79,7 +80,7 @@ void main() {
     }
 
     await tester.pumpWidget(
-      MaterialApp(
+      _TestApp(
         home: SessionRosterPage(
           store: _MemoryStore(session),
           sessionId: session.id,
@@ -103,7 +104,7 @@ void main() {
     final store = _MemoryStore(session);
 
     await tester.pumpWidget(
-      MaterialApp(home: LiveSessionPage(store: store, sessionId: 1)),
+      _TestApp(home: LiveSessionPage(store: store, sessionId: 1)),
     );
     await tester.pumpAndSettle();
 
@@ -121,7 +122,7 @@ void main() {
     final store = _MemoryStore(session);
 
     await tester.pumpWidget(
-      MaterialApp(home: LiveSessionPage(store: store, sessionId: 1)),
+      _TestApp(home: LiveSessionPage(store: store, sessionId: 1)),
     );
     await tester.pumpAndSettle();
 
@@ -168,7 +169,7 @@ void main() {
     final match = session.assignNext(1);
 
     await tester.pumpWidget(
-      MaterialApp(
+      _TestApp(
         home: LiveSessionPage(store: _MemoryStore(session), sessionId: 2),
       ),
     );
@@ -207,7 +208,7 @@ void main() {
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(textScaler: TextScaler.linear(1.5)),
-        child: MaterialApp(
+        child: _TestApp(
           home: LiveSessionPage(store: _MemoryStore(session), sessionId: 1),
         ),
       ),
@@ -224,7 +225,7 @@ void main() {
     final match = session.assignNextGroups(1);
 
     await tester.pumpWidget(
-      MaterialApp(
+      _TestApp(
         home: LiveSessionPage(store: _MemoryStore(session), sessionId: 1),
       ),
     );
@@ -267,7 +268,7 @@ void main() {
     await tester.pumpWidget(
       MediaQuery(
         data: const MediaQueryData(textScaler: TextScaler.linear(1.3)),
-        child: MaterialApp(
+        child: _TestApp(
           theme: RallyPairTheme.light,
           home: LiveSessionPage(store: _MemoryStore(session), sessionId: 1),
         ),
@@ -309,7 +310,7 @@ void main() {
     session.addPlayer('临时乙');
 
     await tester.pumpWidget(
-      MaterialApp(
+      _TestApp(
         home: LiveSessionPage(store: _MemoryStore(session), sessionId: 1),
       ),
     );
@@ -337,7 +338,7 @@ void main() {
     final store = _MemoryStore(session);
 
     await tester.pumpWidget(
-      MaterialApp(home: LiveSessionPage(store: store, sessionId: 1)),
+      _TestApp(home: LiveSessionPage(store: store, sessionId: 1)),
     );
     await tester.pumpAndSettle();
 
@@ -360,7 +361,7 @@ void main() {
     session.createManualGroup(5, 6);
 
     await tester.pumpWidget(
-      MaterialApp(
+      _TestApp(
         home: LiveSessionPage(store: _MemoryStore(session), sessionId: 1),
       ),
     );
@@ -388,7 +389,7 @@ void main() {
     session.complete();
 
     await tester.pumpWidget(
-      MaterialApp(home: SessionLibraryPage(store: _MemoryStore(session))),
+      _TestApp(home: SessionLibraryPage(store: _MemoryStore(session))),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('完整流程'));
@@ -443,7 +444,7 @@ void main() {
     session.complete();
 
     await tester.pumpWidget(
-      MaterialApp(
+      _TestApp(
         home: SessionSummaryPage(store: _MemoryStore(session), sessionId: 1),
       ),
     );
@@ -460,9 +461,7 @@ void main() {
   testWidgets('Debug 测试按钮写入八个单场地单双打状态样本', (tester) async {
     final store = _MemoryStore(_draft(4));
 
-    await tester.pumpWidget(
-      MaterialApp(home: SessionLibraryPage(store: store)),
-    );
+    await tester.pumpWidget(_TestApp(home: SessionLibraryPage(store: store)));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const ValueKey('debug-reset-data')));
@@ -546,6 +545,24 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+}
+
+class _TestApp extends StatelessWidget {
+  const _TestApp({required this.home, this.theme});
+
+  final Widget home;
+  final ThemeData? theme;
+
+  @override
+  Widget build(BuildContext context) {
+    return ScreenUtilInit(
+      designSize: const Size(360, 800),
+      minTextAdapt: true,
+      splitScreenMode: true,
+      builder: (context, child) => MaterialApp(theme: theme, home: child),
+      child: home,
+    );
+  }
 }
 
 PlaySession _draft(int count) {
